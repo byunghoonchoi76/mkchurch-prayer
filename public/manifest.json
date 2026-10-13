@@ -1,0 +1,26 @@
+{
+  "name": "구리 목양교회 기도",
+  "short_name": "기도",
+  "description": "구리 목양교회 성도들을 위한 기도 앱 — 기도 타이머·기록·기도제목·알림",
+  "lang": "ko",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#104C6E",
+  "theme_color": "#104C6E",
+  "icons": [
+    {
+      "src": "./app-icon.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./app-icon.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
