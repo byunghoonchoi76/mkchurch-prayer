@@ -21,7 +21,6 @@ type PrayerTime = ReturnType<typeof usePrayerTime>;
 /** 기도 기록 — 이번 주 달성률 · 기도 달력 · 최근 평균 · 상세 통계 */
 export default function PrayerRecordsScreen() {
   const router = useRouter();
-  const theme = useTheme();
   const active = useAllPrayerTime();
   const { goal, setGoal } = useWeeklyGoal('personal');
 
@@ -37,13 +36,6 @@ export default function PrayerRecordsScreen() {
           title="기도 통계"
           subtitle="기도제목 상태·응답률·분류별 분포를 한눈에"
           onPress={() => router.push('/prayer/stats')}
-        />
-        <View style={[styles.menuDivider, { backgroundColor: theme.border }]} />
-        <ListRow
-          icon="sparkles-outline"
-          title="오늘의 기도"
-          subtitle="기도제목을 하나씩 넘기며 기도해요"
-          onPress={() => router.push('/prayer/today')}
         />
       </Card>
     </Screen>
