@@ -283,7 +283,7 @@ export default function TodayPrayerScreen() {
             style={({ pressed }) => [styles.amenBtn, { backgroundColor: theme.accent, opacity: pressed ? 0.9 : 1 }]}>
             <Ionicons name="checkmark" size={24} color="#fff" />
             <ThemedText type="subtitle" style={{ color: '#fff' }}>
-              {index + 1 >= topics.length ? '아멘 · 마치기' : '아멘 · 다음'}
+              {index + 1 >= topics.length ? '아멘' : '아멘 · 다음'}
             </ThemedText>
           </Pressable>
         </View>
