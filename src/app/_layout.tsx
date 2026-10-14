@@ -1,9 +1,7 @@
-import { Ionicons } from '@expo/vector-icons';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { Pressable } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { Colors } from '@/constants/theme';
@@ -89,24 +87,12 @@ export default function RootLayout() {
   );
 }
 
-/** 홈 헤더 오른쪽의 '더보기'(설정) 버튼 */
-function SettingsButton() {
-  const router = useRouter();
-  const scheme = useColorScheme();
-  const color = scheme === 'dark' ? Colors.dark.text : Colors.light.text;
-  return (
-    <Pressable onPress={() => router.push('/settings')} hitSlop={10} accessibilityLabel="더보기" style={{ paddingHorizontal: 4 }}>
-      <Ionicons name="ellipsis-horizontal-circle-outline" size={24} color={color} />
-    </Pressable>
-  );
-}
-
 function RootNavigator() {
   useStartupGate();
   return (
     <Stack screenOptions={{ headerBackTitle: '뒤로' }}>
       <Stack.Screen name="welcome" options={{ headerShown: false, gestureEnabled: false }} />
-      <Stack.Screen name="index" options={{ title: '기도', headerRight: () => <SettingsButton /> }} />
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="prayer/today" options={{ title: '오늘의 기도' }} />
       <Stack.Screen name="prayer/stats" options={{ title: '기도 통계' }} />
       <Stack.Screen name="prayer/communal" options={{ title: '공동 기도제목' }} />
@@ -115,7 +101,6 @@ function RootNavigator() {
       <Stack.Screen name="prayer/new" options={{ title: '기도제목 나누기', presentation: 'modal' }} />
       <Stack.Screen name="prayer/edit/[id]" options={{ title: '기도제목 수정', presentation: 'modal' }} />
       <Stack.Screen name="reminders" options={{ title: '기도 알림' }} />
-      <Stack.Screen name="settings" options={{ title: '더보기' }} />
       <Stack.Screen name="profile" options={{ title: '내 정보 수정' }} />
       <Stack.Screen name="privacy" options={{ title: '개인정보처리방침' }} />
       <Stack.Screen name="terms" options={{ title: '이용약관' }} />
