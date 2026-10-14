@@ -1,12 +1,17 @@
-import { useRouter } from 'expo-router';
-import { View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
-import { Badge, Button, Card, ListRow, SectionHeader } from '@/components/ui';
+import { Badge, Button, Card, ListRow, SectionHeader, Toggle } from '@/components/ui';
+import { Radius, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth';
 import { dataMode, repository, useAsyncData } from '@/lib/data';
 import { resetSampleData } from '@/lib/data/sample-repository';
+import { usePrayerBgm } from '@/lib/prayer-bgm';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -48,6 +53,8 @@ export default function SettingsScreen() {
           />
         </Card>
       </View>
+
+      <MusicSettings />
 
       {isAdmin ? (
         <Card>
@@ -100,3 +107,96 @@ export default function SettingsScreen() {
     </Screen>
   );
 }
+
+/** 기도 배경음악 — 켜기/끄기 + 음악 선택 + 미리듣기 */
+function MusicSettings() {
+  const theme = useTheme();
+  const bgm = usePrayerBgm();
+  const [previewing, setPreviewing] = useState(false);
+
+  // 설정 탭을 벗어나면 미리듣기를 멈춥니다.
+  const stop = bgm.stop;
+  useFocusEffect(
+    useCallback(() => {
+      return () => stop();
+    }, [stop]),
+  );
+
+  const togglePreview = () => {
+    if (previewing) {
+      bgm.stop();
+      setPreviewing(false);
+    } else {
+      bgm.start();
+      setPreviewing(true);
+    }
+  };
+
+  const select = (id: string) => {
+    bgm.setChoice(id);
+    // 미리듣는 중이면 새로 고른 음악으로 바로 바꿔 들려줍니다.
+    if (previewing) setTimeout(() => bgm.start(), 80);
+  };
+
+  const onToggle = (v: boolean) => {
+    bgm.setEnabled(v);
+    if (!v) {
+      bgm.stop();
+      setPreviewing(false);
+    }
+  };
+
+  return (
+    <View>
+      <SectionHeader title="기도 배경음악" />
+      <Card>
+        <Toggle label="기도할 때 배경음악" value={bgm.enabled} onChange={onToggle} />
+
+        {bgm.enabled ? (
+          <>
+            <View style={[styles.sep, { backgroundColor: theme.border }]} />
+            {bgm.options.map((opt) => {
+              const selected = bgm.choice === opt.id;
+              return (
+                <Pressable key={opt.id} onPress={() => select(opt.id)} style={styles.musicRow}>
+                  <Ionicons
+                    name={selected ? 'radio-button-on' : 'radio-button-off'}
+                    size={20}
+                    color={selected ? theme.primary : theme.textMuted}
+                  />
+                  <ThemedText type="small" style={{ color: selected ? theme.primary : theme.text, fontWeight: selected ? '700' : '500' }}>
+                    {opt.name}
+                  </ThemedText>
+                </Pressable>
+              );
+            })}
+
+            {bgm.available ? (
+              <Button
+                label={previewing ? '미리듣기 정지' : '미리듣기'}
+                icon={previewing ? 'stop' : 'play'}
+                variant="secondary"
+                onPress={togglePreview}
+              />
+            ) : null}
+
+            <ThemedText type="caption" themeColor="textMuted">
+              고른 음악은 기도 타이머를 시작할 때 자동으로 재생돼요.
+            </ThemedText>
+          </>
+        ) : null}
+      </Card>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  sep: { height: StyleSheet.hairlineWidth, marginVertical: Spacing.one },
+  musicRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    paddingVertical: Spacing.two,
+    borderRadius: Radius.small,
+  },
+});

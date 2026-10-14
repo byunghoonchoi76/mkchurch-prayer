@@ -14,7 +14,7 @@ export default function PrayerTopicsScreen() {
   return (
     <Screen>
       <View>
-        <SectionHeader title="나의 기도제목" />
+        <SectionHeader title="나의 기도" />
         <Card>
           <ListRow
             icon="flower-outline"

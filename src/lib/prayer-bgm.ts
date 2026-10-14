@@ -18,8 +18,13 @@ import { parseYouTubeUrl } from '@/lib/youtube';
  */
 
 const PREF_KEY = 'church-app/prayer-bgm';
+/** 사용자가 고른 배경음악 선택 저장 키 */
+const CHOICE_KEY = 'church-app/prayer-bgm-choice';
 
 type BgmEngine = { start: () => void; stop: () => void };
+
+/** 설정에서 고를 수 있는 배경음악 한 가지 */
+export type PrayerMusicOption = { id: string; name: string };
 
 // ── 오디오 파일(mp3 등) 재생 ──────────────────────────────────────
 const AUDIO_INDEX_KEY = 'church-app/prayer-bgm-audio-idx';
@@ -335,19 +340,82 @@ function createAmbientEngine(): BgmEngine {
   };
 }
 
+// ── 음원 목록 / 선택 ───────────────────────────────────────────────
+/** mp3 등 오디오 파일 링크(유튜브 아님) — 광고가 없어 우선합니다. */
+function listAudioUrls(): string[] {
+  return (ChurchInfo.prayerBgmUrls ?? []).filter(Boolean).filter((u) => !parseYouTubeUrl(u));
+}
+function listYtIds(): string[] {
+  return (ChurchInfo.prayerBgmUrls ?? [])
+    .filter(Boolean)
+    .map((u) => parseYouTubeUrl(u)?.videoId)
+    .filter((id): id is string => !!id);
+}
+/** 재생에 쓰는 음원 목록(오디오 우선, 없으면 유튜브) */
+function listTracks(): string[] {
+  const audio = listAudioUrls();
+  return audio.length ? audio : listYtIds();
+}
+
+/** 설정에서 고를 수 있는 배경음악 목록 — 랜덤 · 곡별 · 내장 패드음 */
+export function prayerMusicOptions(): PrayerMusicOption[] {
+  const tracks = listTracks();
+  const opts: PrayerMusicOption[] = [];
+  if (tracks.length > 1) opts.push({ id: 'random', name: '여러 곡 번갈아 (랜덤)' });
+  tracks.forEach((_, i) => opts.push({ id: `track-${i}`, name: `음악 ${i + 1}` }));
+  opts.push({ id: 'ambient', name: '잔잔한 음악 (내장)' });
+  return opts;
+}
+
+/** 기본 선택: 곡이 여러 개면 랜덤, 한 개면 그 곡, 없으면 내장 */
+export function defaultMusicId(): string {
+  const n = listTracks().length;
+  if (n > 1) return 'random';
+  if (n === 1) return 'track-0';
+  return 'ambient';
+}
+
+// 재생에 쓰는 '현재 선택'은 모듈 전역으로 둬, 어느 화면에서 start 하든 같은 선택을 씁니다.
+let currentChoice = defaultMusicId();
+let choiceLoaded = false;
+async function loadChoice(): Promise<string> {
+  if (!choiceLoaded) {
+    try {
+      const v = await AsyncStorage.getItem(CHOICE_KEY);
+      if (v) currentChoice = v;
+    } catch {
+      /* noop */
+    }
+    choiceLoaded = true;
+  }
+  return currentChoice;
+}
+
+function buildEngine(choice: string): BgmEngine {
+  const audio = listAudioUrls();
+  const tracks = listTracks();
+  const makeFor = (urls: string[]) => (audio.length ? createAudioPlaylistEngine(urls) : createYouTubePlaylistEngine(urls));
+  if (choice === 'ambient' || tracks.length === 0) return createAmbientEngine();
+  if (choice.startsWith('track-')) {
+    const i = Number(choice.slice('track-'.length));
+    return tracks[i] ? makeFor([tracks[i]]) : createAmbientEngine();
+  }
+  // 'random' 또는 알 수 없는 값 → 전체 목록
+  return makeFor(tracks);
+}
+
 let engine: BgmEngine | null = null;
+let engineChoice: string | null = null;
 function getEngine(): BgmEngine | null {
   if (Platform.OS !== 'web') return null;
-  if (!engine) {
-    const urls = (ChurchInfo.prayerBgmUrls ?? []).filter(Boolean);
-    // 유튜브가 아닌 링크(mp3 등 오디오 파일)를 우선합니다 — 광고가 없습니다.
-    const audioUrls = urls.filter((u) => !parseYouTubeUrl(u));
-    const ytIds = urls
-      .map((u) => parseYouTubeUrl(u)?.videoId)
-      .filter((id): id is string => !!id);
-    if (audioUrls.length) engine = createAudioPlaylistEngine(audioUrls);
-    else if (ytIds.length) engine = createYouTubePlaylistEngine(ytIds);
-    else engine = createAmbientEngine();
+  if (!engine || engineChoice !== currentChoice) {
+    try {
+      engine?.stop();
+    } catch {
+      /* noop */
+    }
+    engine = buildEngine(currentChoice);
+    engineChoice = currentChoice;
   }
   return engine;
 }
@@ -356,12 +424,16 @@ function getEngine(): BgmEngine | null {
 export function usePrayerBgm() {
   const available = Platform.OS === 'web';
   const [enabled, setEnabledState] = useState(true);
+  const [choice, setChoiceState] = useState<string>(currentChoice);
 
   useEffect(() => {
     AsyncStorage.getItem(PREF_KEY)
       .then((v) => {
         if (v === 'off') setEnabledState(false);
       })
+      .catch(() => {});
+    loadChoice()
+      .then((c) => setChoiceState(c))
       .catch(() => {});
   }, []);
 
@@ -370,7 +442,11 @@ export function usePrayerBgm() {
   }, [available]);
 
   const stop = useCallback(() => {
-    getEngine()?.stop();
+    try {
+      engine?.stop();
+    } catch {
+      /* noop */
+    }
   }, []);
 
   const setEnabled = useCallback((next: boolean) => {
@@ -378,5 +454,20 @@ export function usePrayerBgm() {
     void AsyncStorage.setItem(PREF_KEY, next ? 'on' : 'off').catch(() => {});
   }, []);
 
-  return { available, enabled, setEnabled, start, stop };
+  /** 배경음악 선택을 바꿉니다. 재생 중이던 엔진은 비워, 다음 재생에 새 선택이 반영됩니다. */
+  const setChoice = useCallback((id: string) => {
+    currentChoice = id;
+    choiceLoaded = true;
+    setChoiceState(id);
+    void AsyncStorage.setItem(CHOICE_KEY, id).catch(() => {});
+    try {
+      engine?.stop();
+    } catch {
+      /* noop */
+    }
+    engine = null;
+    engineChoice = null;
+  }, []);
+
+  return { available, enabled, setEnabled, start, stop, choice, setChoice, options: prayerMusicOptions() };
 }
