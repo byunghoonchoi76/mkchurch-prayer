@@ -4,8 +4,9 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Circle, Line, Path } from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
 
+import { PrayerDial } from '@/components/prayer-dial';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, ListRow, SectionHeader } from '@/components/ui';
@@ -29,6 +30,7 @@ type PrayerTime = ReturnType<typeof usePrayerTime>;
 
 export default function PrayerScreen() {
   const router = useRouter();
+  const theme = useTheme();
   // 개인 + 공동 참여 시간을 하나로 합쳐 봅니다.
   const active = useAllPrayerTime();
   const { goal, setGoal } = useWeeklyGoal('personal');
@@ -38,6 +40,9 @@ export default function PrayerScreen() {
       {/* 큰 기도 타이머 — 화면 맨 위, 마치면 결과가 바로 나옵니다 */}
       <TimerCard active={active} goal={goal} />
 
+      {/* 오늘의 기도 — 기도제목을 하나씩 넘기며 기도 */}
+      <TodayCard />
+
       <GaugeCard active={active} goal={goal} onGoal={setGoal} />
       <CalendarCard active={active} />
       <AverageCard active={active} />
@@ -46,6 +51,13 @@ export default function PrayerScreen() {
 
       <Card>
         <ListRow
+          icon="stats-chart-outline"
+          title="기도 통계"
+          subtitle="기도 시간·제목 현황·연속 기도를 한눈에"
+          onPress={() => router.push('/prayer/stats')}
+        />
+        <View style={[styles.menuDivider, { backgroundColor: theme.border }]} />
+        <ListRow
           icon="notifications-outline"
           title="기도 알림"
           subtitle="정한 요일·시간에 기도 알림을 받아요"
@@ -53,6 +65,38 @@ export default function PrayerScreen() {
         />
       </Card>
     </Screen>
+  );
+}
+
+/** 홈의 '오늘의 기도' 진입 카드 — 기도중인 제목 수를 보여 주고 카드덱 기도로 들어갑니다. */
+function TodayCard() {
+  const theme = useTheme();
+  const router = useRouter();
+  const { user } = useAuth();
+  const topics = useAsyncData<PrayerRequest[]>(
+    () => (dataMode === 'supabase' && !user ? Promise.resolve([]) : repository.listMyPrayerRequests()),
+    [user],
+  );
+  useFocusEffect(topics.reload);
+  const pending = (topics.data ?? []).filter((t) => t.status === '기도중').length;
+
+  return (
+    <Pressable
+      onPress={() => router.push('/prayer/today')}
+      style={({ pressed }) => [styles.todayCard, { backgroundColor: theme.primary, opacity: pressed ? 0.92 : 1 }]}>
+      <View style={styles.todayIcon}>
+        <Ionicons name="sparkles" size={22} color={theme.onPrimary} />
+      </View>
+      <View style={styles.flex}>
+        <ThemedText type="subtitle" style={{ color: theme.onPrimary }}>
+          오늘의 기도
+        </ThemedText>
+        <ThemedText type="caption" style={{ color: theme.onPrimary, opacity: 0.85 }}>
+          {pending > 0 ? `기도할 제목 ${pending}개를 하나씩 기도해요` : '기도제목을 하나씩 넘기며 기도해요'}
+        </ThemedText>
+      </View>
+      <Ionicons name="chevron-forward" size={22} color={theme.onPrimary} />
+    </Pressable>
   );
 }
 
@@ -555,65 +599,6 @@ function TimerCard({ active, goal }: { active: PrayerTime; goal: number }) {
   );
 }
 
-/**
- * 아날로그 기도 다이얼 — 파란 원판 위에 60개의 흰색 눈금이 시계처럼 둘려 있고,
- * 초가 지날수록 눈금이 노란색으로 채워지며 초침이 함께 돕니다. 가운데에는
- * 기존 디지털 시간(MM:SS)을 그대로 크게 표시합니다.
- */
-// 시작 버튼 이미지(+1H prayer)에서 뽑은 색 — 다이얼과 통일합니다.
-const DIAL_BLUE = '#1B498E';
-const DIAL_GOLD = '#EADB4E';
-
-function PrayerDial({ seconds, display, paused }: { seconds: number; display: string; paused?: boolean }) {
-  const size = 268;
-  const c = size / 2;
-  const rDisc = c - 6; // 파란 원판 반지름
-  const rOuter = c - 16; // 눈금 바깥쪽
-  const rInner = rOuter - 15; // 짧은 눈금 안쪽
-  const rInnerLong = rOuter - 24; // 긴 눈금(5칸마다) 안쪽
-
-  const secOfMin = seconds % 60; // 이번 분 안에서의 초 (0~59)
-
-  const ticks = [];
-  for (let i = 0; i < 60; i += 1) {
-    const a = ((-90 + i * 6) * Math.PI) / 180; // 맨 위(12시)에서 시작
-    const long = i % 5 === 0;
-    const ri = long ? rInnerLong : rInner;
-    const passed = i <= secOfMin; // 초침이 지나온 눈금은 노랗게 채웁니다
-    ticks.push(
-      <Line
-        key={i}
-        x1={c + ri * Math.cos(a)}
-        y1={c + ri * Math.sin(a)}
-        x2={c + rOuter * Math.cos(a)}
-        y2={c + rOuter * Math.sin(a)}
-        stroke={passed ? DIAL_GOLD : 'rgba(255,255,255,0.4)'}
-        strokeWidth={long ? 3.5 : 2}
-        strokeLinecap="round"
-      />,
-    );
-  }
-
-  // 초침 — 가운데에서 현재 초 위치까지
-  const ha = ((-90 + secOfMin * 6) * Math.PI) / 180;
-  const handLen = rInnerLong - 4;
-
-  return (
-    <View style={styles.dialWrap}>
-      <Svg width={size} height={size}>
-        <Circle cx={c} cy={c} r={rDisc} fill={DIAL_BLUE} />
-        {ticks}
-        <Line x1={c} y1={c} x2={c + handLen * Math.cos(ha)} y2={c + handLen * Math.sin(ha)} stroke={DIAL_GOLD} strokeWidth={3} strokeLinecap="round" />
-        <Circle cx={c} cy={c} r={4.5} fill={DIAL_GOLD} />
-      </Svg>
-      <View style={[StyleSheet.absoluteFill, styles.dialCenter]} pointerEvents="none">
-        <ThemedText style={styles.dialTime}>{display}</ThemedText>
-        <ThemedText style={styles.dialLabel}>{paused ? '일시정지' : '기도중'}</ThemedText>
-      </View>
-    </View>
-  );
-}
-
 /** 전체 화면 기도 모드 — 큰 타이머 + 나의 기도제목을 보며 집중해서 기도합니다. */
 function PrayerFocusModal({
   visible,
@@ -909,6 +894,22 @@ const styles = StyleSheet.create({
 
   quickRow: { flexDirection: 'row', gap: Spacing.two },
   timerBox: { borderRadius: Radius.medium, padding: Spacing.three, alignItems: 'center', gap: Spacing.two },
+
+  todayCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    borderRadius: Radius.large,
+    padding: Spacing.four,
+  },
+  todayIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   // 큰 기도 타이머
   timerCard: { alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.four },

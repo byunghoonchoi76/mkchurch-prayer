@@ -2,12 +2,14 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Platform, StyleSheet, View } from 'react-native';
 
+import { CategoryPicker } from '@/components/prayer-meta';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, EmptyState, Field, LoadingState, Toggle } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { dataMode, repository } from '@/lib/data';
+import type { PrayerCategory } from '@/lib/data/types';
 
 /** 개인 기도제목 수정 — 본인이 올린 제목·내용·익명 여부를 바꿉니다. */
 export default function EditPrayerRequestScreen() {
@@ -17,6 +19,7 @@ export default function EditPrayerRequestScreen() {
 
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
+  const [category, setCategory] = useState<PrayerCategory>('기타');
   const [anonymous, setAnonymous] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -35,6 +38,7 @@ export default function EditPrayerRequestScreen() {
         }
         setTitle(found.title);
         setBody(found.body);
+        setCategory(found.category);
         setAnonymous(found.anonymous);
       })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : '불러오지 못했습니다.'))
@@ -57,6 +61,7 @@ export default function EditPrayerRequestScreen() {
         body: body.trim(),
         anonymous,
         author: user?.name ?? '성도',
+        category,
       });
       router.back();
     } catch (e) {
@@ -137,6 +142,10 @@ export default function EditPrayerRequestScreen() {
           onChangeText={setBody}
           multiline
         />
+        <View style={styles.fieldBlock}>
+          <ThemedText type="smallBold">분류</ThemedText>
+          <CategoryPicker value={category} onChange={setCategory} />
+        </View>
         <Toggle label="익명으로 표시" value={anonymous} onChange={setAnonymous} />
         {anonymous ? (
           <ThemedText type="caption" themeColor="textMuted">
@@ -157,4 +166,5 @@ export default function EditPrayerRequestScreen() {
 
 const styles = StyleSheet.create({
   form: { gap: Spacing.three },
+  fieldBlock: { gap: Spacing.two },
 });

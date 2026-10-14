@@ -16,6 +16,8 @@ import type {
   PrayerRequest,
   PrayerRequestInput,
   PrayerRequestUpdate,
+  PrayerStatus,
+  PrayerCategory,
   PrayerKind,
   PrayerTimeEntry,
   Sermon,
@@ -123,18 +125,40 @@ const fromSermon = (input: SermonInput) => ({
   summary: input.summary,
 });
 
-const toPrayer = (row: Row): PrayerRequest => ({
-  id: row.id,
-  title: row.title,
-  body: row.body,
-  author: row.author,
-  authorId: row.author_id ?? undefined,
-  anonymous: row.anonymous,
-  answered: row.answered,
-  shared: row.shared ?? true,
-  prayCount: row.pray_count ?? 0,
-  createdAt: row.created_at,
-});
+// status·category 컬럼이 아직 마이그레이션되지 않았어도 동작하도록 기본값을 둡니다.
+const toPrayer = (row: Row): PrayerRequest => {
+  const status: PrayerStatus = (row.status as PrayerStatus) ?? (row.answered ? '응답됨' : '기도중');
+  return {
+    id: row.id,
+    title: row.title,
+    body: row.body,
+    author: row.author,
+    authorId: row.author_id ?? undefined,
+    anonymous: row.anonymous,
+    answered: status === '응답됨',
+    status,
+    category: (row.category as PrayerCategory) ?? '기타',
+    shared: row.shared ?? true,
+    prayCount: row.pray_count ?? 0,
+    createdAt: row.created_at,
+  };
+};
+
+/**
+ * 새 컬럼(status·category)이 아직 DB에 없을 수도 있으므로, '알 수 없는 컬럼' 오류가 나면
+ * 그 컬럼들을 빼고 한 번 더 시도합니다. (마이그레이션 전에 프런트가 먼저 배포돼도 깨지지 않게)
+ */
+function isMissingPrayerColumn(err: { code?: string; message?: string } | null): boolean {
+  if (!err) return false;
+  const msg = err.message ?? '';
+  return err.code === 'PGRST204' || (/column/i.test(msg) && (msg.includes('status') || msg.includes('category')));
+}
+
+/** status·category 키를 뺀 사본을 돌려줍니다. */
+function withoutPrayerExtras<T extends Record<string, any>>(patch: T): Omit<T, 'status' | 'category'> {
+  const { status: _s, category: _c, ...rest } = patch;
+  return rest;
+}
 
 const toCommunal = (row: Row): CommunalPrayer => ({
   id: row.id,
@@ -424,35 +448,37 @@ export const supabaseRepository: ChurchRepository = {
 
   async updatePrayerRequest(id: string, input: PrayerRequestUpdate) {
     const sb = requireSupabase();
-    const res = await sb
-      .from('prayer_requests')
-      .update({
-        title: input.title,
-        body: input.body,
-        anonymous: input.anonymous,
-        author: input.anonymous ? '익명' : input.author,
-      })
-      .eq('id', id)
-      .select()
-      .single();
+    const patch: Row = {
+      title: input.title,
+      body: input.body,
+      anonymous: input.anonymous,
+      author: input.anonymous ? '익명' : input.author,
+    };
+    if (input.category) patch.category = input.category;
+    let res = await sb.from('prayer_requests').update(patch).eq('id', id).select().single();
+    if (res.error && isMissingPrayerColumn(res.error)) {
+      res = await sb.from('prayer_requests').update(withoutPrayerExtras(patch)).eq('id', id).select().single();
+    }
     return toPrayer(unwrap(res));
   },
 
   async createPrayerRequest(input: PrayerRequestInput) {
     const sb = requireSupabase();
-    const res = await sb
-      .from('prayer_requests')
-      .insert({
-        title: input.title,
-        body: input.body,
-        author: input.anonymous ? '익명' : input.author,
-        anonymous: input.anonymous,
-        shared: input.shared,
-        // 본인이 올린 기도제목만 수정·삭제할 수 있게 작성자를 남깁니다.
-        author_id: await currentUserId(),
-      })
-      .select()
-      .single();
+    const full: Row = {
+      title: input.title,
+      body: input.body,
+      author: input.anonymous ? '익명' : input.author,
+      anonymous: input.anonymous,
+      shared: input.shared,
+      status: '기도중',
+      category: input.category ?? '기타',
+      // 본인이 올린 기도제목만 수정·삭제할 수 있게 작성자를 남깁니다.
+      author_id: await currentUserId(),
+    };
+    let res = await sb.from('prayer_requests').insert(full).select().single();
+    if (res.error && isMissingPrayerColumn(res.error)) {
+      res = await sb.from('prayer_requests').insert(withoutPrayerExtras(full)).select().single();
+    }
     return toPrayer(unwrap(res));
   },
 
@@ -472,12 +498,28 @@ export const supabaseRepository: ChurchRepository = {
 
   async markPrayerAnswered(id, answered) {
     const sb = requireSupabase();
-    const res = await sb
-      .from('prayer_requests')
-      .update({ answered })
-      .eq('id', id)
-      .select()
-      .single();
+    const patch: Row = { answered, status: answered ? '응답됨' : '기도중' };
+    let res = await sb.from('prayer_requests').update(patch).eq('id', id).select().single();
+    if (res.error && isMissingPrayerColumn(res.error)) {
+      res = await sb.from('prayer_requests').update({ answered }).eq('id', id).select().single();
+    }
+    return toPrayer(unwrap(res));
+  },
+
+  async setPrayerStatus(id, status) {
+    const sb = requireSupabase();
+    // answered 는 과거 호환으로 status 와 함께 맞춰 둡니다.
+    const patch: Row = { status, answered: status === '응답됨' };
+    let res = await sb.from('prayer_requests').update(patch).eq('id', id).select().single();
+    if (res.error && isMissingPrayerColumn(res.error)) {
+      // status 컬럼이 없으면 answered 만이라도 반영합니다.
+      res = await sb
+        .from('prayer_requests')
+        .update({ answered: status === '응답됨' })
+        .eq('id', id)
+        .select()
+        .single();
+    }
     return toPrayer(unwrap(res));
   },
 

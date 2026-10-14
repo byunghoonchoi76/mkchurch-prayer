@@ -152,6 +152,10 @@ create table if not exists public.prayer_requests (
   author_id uuid references auth.users on delete set null,
   anonymous boolean not null default false,
   answered boolean not null default false,
+  -- 상태: 기도중 / 응답됨 / 종료
+  status text not null default '기도중',
+  -- 분류: 신앙 / 가족 / 감사 / 건강 / 교회 / 기타
+  category text not null default '기타',
   -- true 면 '기도 요청'으로 성도들에게 공개. false 면 작성자만 보는 개인 기도제목.
   shared boolean not null default true,
   pray_count integer not null default 0,
@@ -159,6 +163,8 @@ create table if not exists public.prayer_requests (
 );
 
 alter table public.prayer_requests add column if not exists shared boolean not null default true;
+alter table public.prayer_requests add column if not exists status text not null default '기도중';
+alter table public.prayer_requests add column if not exists category text not null default '기타';
 
 create index if not exists prayer_requests_created_idx on public.prayer_requests (created_at desc);
 

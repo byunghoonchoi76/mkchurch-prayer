@@ -1,23 +1,31 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { HeroBanner } from '@/components/hero-banner';
+import { CategoryChip, StatusBadge, StatusPicker } from '@/components/prayer-meta';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { Badge, Button, Card, EmptyState, ErrorState, LoadingState } from '@/components/ui';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth';
 import { dataMode, repository, useAsyncData } from '@/lib/data';
-import type { PrayerRequest } from '@/lib/data/types';
+import { PRAYER_CATEGORIES, PRAYER_STATUSES, type PrayerCategory, type PrayerRequest, type PrayerStatus } from '@/lib/data/types';
 import { formatRelative } from '@/lib/format';
+
+type StatusFilter = '전체' | PrayerStatus;
+type CategoryFilter = '전체' | PrayerCategory;
 
 /** 개인 기도제목 — 나만 보는 목록. 원하면 '기도 요청'으로 올려 성도들과 함께 기도할 수 있습니다. */
 export default function PersonalPrayerScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const needsSignIn = dataMode === 'supabase' && !user;
+
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('전체');
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('전체');
 
   const myRequests = useAsyncData(
     () => (needsSignIn ? Promise.resolve([]) : repository.listMyPrayerRequests()),
@@ -26,12 +34,12 @@ export default function PersonalPrayerScreen() {
   const reloadMy = myRequests.reload;
   useFocusEffect(reloadMy);
 
-  const toggleAnswered = async (id: string, answered: boolean) => {
-    myRequests.setData((cur) => cur?.map((item) => (item.id === id ? { ...item, answered } : item)));
+  const setStatus = async (id: string, status: PrayerStatus) => {
+    myRequests.setData((cur) => cur?.map((item) => (item.id === id ? { ...item, status, answered: status === '응답됨' } : item)));
     try {
-      await repository.markPrayerAnswered(id, answered);
+      await repository.setPrayerStatus(id, status);
     } catch {
-      /* 화면은 유지하고 다음 새로고침에서 맞춥니다. */
+      reloadMy();
     }
   };
 
@@ -44,7 +52,16 @@ export default function PersonalPrayerScreen() {
     }
   };
 
-  const myItems = myRequests.data ?? [];
+  const allItems = myRequests.data ?? [];
+  const items = useMemo(
+    () =>
+      allItems.filter(
+        (it) =>
+          (statusFilter === '전체' || it.status === statusFilter) &&
+          (categoryFilter === '전체' || it.category === categoryFilter),
+      ),
+    [allItems, statusFilter, categoryFilter],
+  );
 
   return (
     <Screen onRefresh={reloadMy}>
@@ -65,20 +82,38 @@ export default function PersonalPrayerScreen() {
             variant="secondary"
             onPress={() => router.push('/prayer/new')}
           />
+
+          {allItems.length > 0 ? (
+            <View style={styles.filters}>
+              <FilterRow
+                options={['전체', ...PRAYER_STATUSES] as StatusFilter[]}
+                value={statusFilter}
+                onChange={setStatusFilter}
+              />
+              <FilterRow
+                options={['전체', ...PRAYER_CATEGORIES] as CategoryFilter[]}
+                value={categoryFilter}
+                onChange={setCategoryFilter}
+              />
+            </View>
+          ) : null}
+
           {myRequests.loading && !myRequests.data ? (
             <LoadingState />
           ) : myRequests.error ? (
             <ErrorState message={myRequests.error} onRetry={myRequests.reload} />
-          ) : myItems.length === 0 ? (
+          ) : allItems.length === 0 ? (
             <EmptyState icon="flower-outline" message="나만의 기도제목을 적어 보세요." />
+          ) : items.length === 0 ? (
+            <EmptyState icon="funnel-outline" message="이 조건에 해당하는 기도제목이 없어요." />
           ) : (
             <View style={styles.stack}>
-              {myItems.map((item) => (
+              {items.map((item) => (
                 <MyPrayerCard
                   key={item.id}
                   item={item}
                   onEdit={() => router.push(`/prayer/edit/${item.id}`)}
-                  onToggleAnswered={() => toggleAnswered(item.id, !item.answered)}
+                  onStatus={(s) => setStatus(item.id, s)}
                   onShare={() => setShared(item.id, true)}
                   onUnshare={() => setShared(item.id, false)}
                 />
@@ -91,29 +126,65 @@ export default function PersonalPrayerScreen() {
   );
 }
 
-/** 개인 기도제목 카드 — 나만 보이며, 원하면 '기도 요청'으로 공개할 수 있습니다. */
+/** 가로 스크롤 필터 칩 줄 (상태 / 분류) */
+function FilterRow<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: T[];
+  value: T;
+  onChange: (v: T) => void;
+}) {
+  const theme = useTheme();
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+      {options.map((opt) => {
+        const selected = opt === value;
+        return (
+          <Pressable
+            key={opt}
+            onPress={() => onChange(opt)}
+            style={[
+              styles.filterChip,
+              {
+                backgroundColor: selected ? theme.primary : theme.backgroundElement,
+                borderColor: selected ? theme.primary : theme.border,
+              },
+            ]}>
+            <ThemedText type="caption" style={{ color: selected ? theme.onPrimary : theme.textSecondary, fontWeight: selected ? '800' : '600' }}>
+              {opt}
+            </ThemedText>
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  );
+}
+
+/** 개인 기도제목 카드 — 분류·상태를 보여 주고, 상태를 바로 바꿀 수 있습니다. */
 function MyPrayerCard({
   item,
   onEdit,
-  onToggleAnswered,
+  onStatus,
   onShare,
   onUnshare,
 }: {
   item: PrayerRequest;
   onEdit: () => void;
-  onToggleAnswered: () => void;
+  onStatus: (s: PrayerStatus) => void;
   onShare: () => void;
   onUnshare: () => void;
 }) {
   const theme = useTheme();
+  const closed = item.status === '종료';
   return (
     <Card>
       <View style={styles.rowBetween}>
-        {item.shared ? (
-          <Badge label="기도 요청 중" tone="primary" />
-        ) : (
-          <Badge label="나만 보기" tone="textSecondary" />
-        )}
+        <View style={styles.metaRow}>
+          <CategoryChip category={item.category} />
+          <StatusBadge status={item.status} />
+        </View>
         <View style={styles.headRight}>
           <ThemedText type="caption" themeColor="textMuted">
             {formatRelative(item.createdAt)}
@@ -123,28 +194,39 @@ function MyPrayerCard({
           </Pressable>
         </View>
       </View>
-      <ThemedText type="smallBold">{item.title}</ThemedText>
+
+      <ThemedText type="smallBold" style={closed && styles.closedText}>
+        {item.title}
+      </ThemedText>
       {item.body ? (
-        <ThemedText type="small" themeColor="textSecondary">
+        <ThemedText type="small" themeColor="textSecondary" style={closed && styles.closedText}>
           {item.body}
         </ThemedText>
       ) : null}
+
       {item.shared ? (
-        <ThemedText type="caption" themeColor="textMuted">
-          함께 기도 {item.prayCount}번 · 성도들이 함께 기도하고 있어요
-        </ThemedText>
-      ) : null}
+        <View style={styles.sharedRow}>
+          <Badge label="기도 요청 중" tone="primary" />
+          <ThemedText type="caption" themeColor="textMuted">
+            함께 기도 {item.prayCount}번
+          </ThemedText>
+        </View>
+      ) : (
+        <Badge label="나만 보기" tone="textSecondary" />
+      )}
+
+      {/* 상태 바꾸기 */}
+      <ThemedText type="caption" themeColor="textMuted" style={styles.sectionLabel}>
+        상태
+      </ThemedText>
+      <StatusPicker value={item.status} onChange={onStatus} />
+
+      {/* 공개 여부 */}
       {item.shared ? (
         <Button label="기도 요청 내리기" icon="eye-off-outline" variant="ghost" onPress={onUnshare} />
       ) : (
-        <Button label="기도 요청으로 올리기" icon="megaphone-outline" variant="secondary" onPress={onShare} />
+        <Button label="기도 요청으로 올리기" icon="megaphone-outline" variant="ghost" onPress={onShare} />
       )}
-      <Button
-        label={item.answered ? '다시 기도 중으로' : '기도 응답되었어요'}
-        icon={item.answered ? 'refresh-outline' : 'checkmark-circle-outline'}
-        variant="ghost"
-        onPress={onToggleAnswered}
-      />
     </Card>
   );
 }
@@ -160,6 +242,18 @@ const styles = StyleSheet.create({
     textShadowRadius: 4,
   },
   stack: { gap: Spacing.two },
+  filters: { gap: Spacing.one },
+  filterRow: { gap: Spacing.one, paddingVertical: 2 },
+  filterChip: {
+    paddingHorizontal: Spacing.three,
+    paddingVertical: 6,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+  },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.one, flexWrap: 'wrap', flex: 1 },
   headRight: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  sharedRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  sectionLabel: { marginTop: Spacing.one },
+  closedText: { textDecorationLine: 'line-through', opacity: 0.55 },
 });

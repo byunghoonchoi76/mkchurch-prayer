@@ -2,18 +2,21 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
+import { CategoryPicker } from '@/components/prayer-meta';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, EmptyState, Field, Toggle } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { dataMode, repository } from '@/lib/data';
+import type { PrayerCategory } from '@/lib/data/types';
 
 export default function NewPrayerRequestScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
+  const [category, setCategory] = useState<PrayerCategory>('기타');
   const [shared, setShared] = useState(false);
   const [anonymous, setAnonymous] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -34,6 +37,7 @@ export default function NewPrayerRequestScreen() {
         authorId: user?.id,
         anonymous,
         shared,
+        category,
       });
       router.back();
     } catch (e) {
@@ -72,6 +76,10 @@ export default function NewPrayerRequestScreen() {
           onChangeText={setBody}
           multiline
         />
+        <View style={styles.fieldBlock}>
+          <ThemedText type="smallBold">분류</ThemedText>
+          <CategoryPicker value={category} onChange={setCategory} />
+        </View>
         <Toggle label="함께 기도해주세요" value={shared} onChange={setShared} />
         <Toggle label="익명으로 올리기" value={anonymous} onChange={setAnonymous} />
         {anonymous ? (
@@ -92,4 +100,5 @@ export default function NewPrayerRequestScreen() {
 
 const styles = StyleSheet.create({
   form: { gap: Spacing.three },
+  fieldBlock: { gap: Spacing.two },
 });

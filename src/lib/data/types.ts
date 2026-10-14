@@ -179,6 +179,28 @@ export interface ChannelVideo {
   isShort?: boolean;
 }
 
+/** 기도제목 상태 — 기도하는 중 / 응답받음 / 마무리(종료) */
+export type PrayerStatus = '기도중' | '응답됨' | '종료';
+
+/** 화면에 표시하는 상태 순서 */
+export const PRAYER_STATUSES: PrayerStatus[] = ['기도중', '응답됨', '종료'];
+
+/** 기도제목 분류(카테고리) */
+export type PrayerCategory = '신앙' | '가족' | '감사' | '건강' | '교회' | '기타';
+
+/** 화면에 표시하는 분류 순서 */
+export const PRAYER_CATEGORIES: PrayerCategory[] = ['신앙', '가족', '감사', '건강', '교회', '기타'];
+
+/** 분류별 대표 색상 (칩·통계 막대에 사용) */
+export const PRAYER_CATEGORY_COLORS: Record<PrayerCategory, string> = {
+  신앙: '#3B82F6',
+  가족: '#EC4899',
+  감사: '#A855F7',
+  건강: '#22C55E',
+  교회: '#F59E0B',
+  기타: '#9CA3AF',
+};
+
 export interface PrayerRequest {
   id: string;
   title: string;
@@ -188,7 +210,12 @@ export interface PrayerRequest {
   /** 올린 사람의 계정 id. 본인만 '응답됨' 으로 바꿀 수 있게 하는 데 씁니다. */
   authorId?: string;
   anonymous: boolean;
+  /** 과거 호환용 불린. status === '응답됨' 과 같은 값으로 유지합니다. */
   answered: boolean;
+  /** 기도중 · 응답됨 · 종료 3단계 상태 */
+  status: PrayerStatus;
+  /** 분류(카테고리) — 신앙·가족·감사 등 */
+  category: PrayerCategory;
   /** true 면 '기도 요청'으로 성도들에게 공개되어 함께 기도할 수 있습니다. false 면 나만 보는 개인 기도제목입니다. */
   shared: boolean;
   prayCount: number;
@@ -197,10 +224,15 @@ export interface PrayerRequest {
 
 export type PrayerRequestInput = Pick<PrayerRequest, 'title' | 'body' | 'author' | 'anonymous' | 'shared'> & {
   authorId?: string;
+  /** 분류(선택). 지정하지 않으면 '기타'로 저장합니다. */
+  category?: PrayerCategory;
 };
 
-/** 개인 기도제목 수정 — 본인이 올린 제목·내용·익명 여부를 바꿉니다. (author 는 익명 해제 시 표시할 실제 이름) */
-export type PrayerRequestUpdate = Pick<PrayerRequest, 'title' | 'body' | 'anonymous'> & { author: string };
+/** 개인 기도제목 수정 — 본인이 올린 제목·내용·익명 여부·분류를 바꿉니다. (author 는 익명 해제 시 표시할 실제 이름) */
+export type PrayerRequestUpdate = Pick<PrayerRequest, 'title' | 'body' | 'anonymous'> & {
+  author: string;
+  category?: PrayerCategory;
+};
 
 /** 공동 기도제목 — 온 성도가 함께 기도하며 시간을 쌓아 가는 교회 공통 제목 */
 export interface CommunalPrayer {
@@ -346,6 +378,8 @@ export interface ChurchRepository {
   deletePrayerRequest(id: string): Promise<void>;
   prayForRequest(id: string): Promise<PrayerRequest>;
   markPrayerAnswered(id: string, answered: boolean): Promise<PrayerRequest>;
+  /** 기도제목 상태를 기도중·응답됨·종료 중 하나로 바꿉니다. */
+  setPrayerStatus(id: string, status: PrayerStatus): Promise<PrayerRequest>;
   /** 개인 기도제목을 '기도 요청'으로 공개하거나 다시 비공개로 되돌립니다. */
   setPrayerShared(id: string, shared: boolean): Promise<PrayerRequest>;
 

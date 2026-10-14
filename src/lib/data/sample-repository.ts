@@ -321,6 +321,7 @@ export const sampleRepository: ChurchRepository = {
     target.body = input.body;
     target.anonymous = input.anonymous;
     target.author = input.anonymous ? '익명' : input.author;
+    if (input.category) target.category = input.category;
     await persist();
     return clone(target);
   },
@@ -336,6 +337,8 @@ export const sampleRepository: ChurchRepository = {
       authorId: input.authorId,
       anonymous: input.anonymous,
       answered: false,
+      status: '기도중',
+      category: input.category ?? '기타',
       shared: input.shared,
       prayCount: 0,
       createdAt: new Date().toISOString(),
@@ -368,6 +371,18 @@ export const sampleRepository: ChurchRepository = {
     const target = db.prayers.find((p) => p.id === id);
     if (!target) throw new Error('기도제목을 찾을 수 없습니다.');
     target.answered = answered;
+    target.status = answered ? '응답됨' : '기도중';
+    await persist();
+    return clone(target);
+  },
+
+  async setPrayerStatus(id, status) {
+    await ready();
+    await delay(60);
+    const target = db.prayers.find((p) => p.id === id);
+    if (!target) throw new Error('기도제목을 찾을 수 없습니다.');
+    target.status = status;
+    target.answered = status === '응답됨';
     await persist();
     return clone(target);
   },

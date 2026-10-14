@@ -107,6 +107,8 @@ function RootNavigator() {
     <Stack screenOptions={{ headerBackTitle: '뒤로' }}>
       <Stack.Screen name="welcome" options={{ headerShown: false, gestureEnabled: false }} />
       <Stack.Screen name="index" options={{ title: '기도', headerRight: () => <SettingsButton /> }} />
+      <Stack.Screen name="prayer/today" options={{ title: '오늘의 기도' }} />
+      <Stack.Screen name="prayer/stats" options={{ title: '기도 통계' }} />
       <Stack.Screen name="prayer/communal" options={{ title: '공동 기도제목' }} />
       <Stack.Screen name="prayer/personal" options={{ title: '개인 기도제목' }} />
       <Stack.Screen name="prayer/requests" options={{ title: '중보기도제목' }} />
