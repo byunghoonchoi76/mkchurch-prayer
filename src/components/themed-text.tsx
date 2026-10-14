@@ -2,6 +2,7 @@ import { Platform, StyleSheet, Text, type TextProps } from 'react-native';
 
 import { Fonts, type ThemeColor } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useFontScale } from '@/lib/font-scale';
 
 export type ThemedTextProps = TextProps & {
   type?: 'default' | 'title' | 'subtitle' | 'heading' | 'body' | 'small' | 'smallBold' | 'caption' | 'link' | 'code';
@@ -10,12 +11,25 @@ export type ThemedTextProps = TextProps & {
 
 export function ThemedText({ style, type = 'default', themeColor, ...rest }: ThemedTextProps) {
   const theme = useTheme();
+  const scale = useFontScale();
+
+  // 타입별 기본 크기에 설정한 배율을 곱합니다. (style 로 직접 지정한 크기는 그대로 둬
+  // 다이얼·타이머 같은 고정 크기 요소가 깨지지 않게 합니다.)
+  const base = styles[type] as { fontSize?: number; lineHeight?: number };
+  const scaled =
+    scale !== 1 && typeof base.fontSize === 'number'
+      ? {
+          fontSize: Math.round(base.fontSize * scale),
+          ...(typeof base.lineHeight === 'number' ? { lineHeight: Math.round(base.lineHeight * scale) } : null),
+        }
+      : null;
 
   return (
     <Text
       style={[
         { color: theme[themeColor ?? 'text'], fontFamily: Fonts.sans },
         styles[type],
+        scaled,
         type === 'link' && { color: theme.primary },
         style,
       ]}

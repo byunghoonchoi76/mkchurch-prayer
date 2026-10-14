@@ -19,7 +19,7 @@ export default function PrayerTopicsScreen() {
           <ListRow
             icon="flower-outline"
             title="개인 기도제목"
-            subtitle="나만의 기도제목을 적고 상태·분류로 관리해요"
+            subtitle="나만 보는 기도제목"
             onPress={() => router.push('/prayer/personal')}
           />
         </Card>
@@ -31,14 +31,14 @@ export default function PrayerTopicsScreen() {
           <ListRow
             icon="people-outline"
             title="공동 기도제목"
-            subtitle="온 성도가 함께 기도하는 교회 공통 제목이에요"
+            subtitle="온 성도가 함께 드리는 기도"
             onPress={() => router.push('/prayer/communal')}
           />
           <View style={{ height: 1, backgroundColor: theme.border, marginVertical: 4 }} />
           <ListRow
             icon="hand-right-outline"
             title="중보기도제목"
-            subtitle="성도들과 나누고 서로 중보하는 기도제목이에요"
+            subtitle="서로를 위해 드리는 기도"
             onPress={() => router.push('/prayer/requests')}
           />
         </Card>

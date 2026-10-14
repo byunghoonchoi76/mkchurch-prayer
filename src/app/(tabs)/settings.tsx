@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { useCallback, useRef, useState } from 'react';
+import { PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
@@ -11,6 +11,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth';
 import { dataMode, repository, useAsyncData } from '@/lib/data';
 import { resetSampleData } from '@/lib/data/sample-repository';
+import { MAX_PT, MIN_PT, useFontScaleControl } from '@/lib/font-scale';
 import { usePrayerBgm } from '@/lib/prayer-bgm';
 
 export default function SettingsScreen() {
@@ -53,6 +54,8 @@ export default function SettingsScreen() {
           />
         </Card>
       </View>
+
+      <FontSizeSettings />
 
       <MusicSettings />
 
@@ -105,6 +108,71 @@ export default function SettingsScreen() {
         </Card>
       </View>
     </Screen>
+  );
+}
+
+/** 글자 크기 — 슬라이더로 앱 전체 글자 크기를 조절(어르신 가독성) */
+function FontSizeSettings() {
+  const theme = useTheme();
+  const { pt, setPt } = useFontScaleControl();
+  const [trackW, setTrackW] = useState(0);
+  const frac = (pt - MIN_PT) / (MAX_PT - MIN_PT);
+
+  const apply = (x: number) => {
+    if (trackW <= 0) return;
+    const f = Math.min(1, Math.max(0, x / trackW));
+    setPt(MIN_PT + f * (MAX_PT - MIN_PT));
+  };
+  const pan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (e) => apply(e.nativeEvent.locationX),
+      onPanResponderMove: (e) => apply(e.nativeEvent.locationX),
+    }),
+  ).current;
+
+  return (
+    <View>
+      <SectionHeader title="글자 크기" />
+      <Card>
+        <View style={styles.rowBetween}>
+          <View style={styles.fsHead}>
+            <Ionicons name="text" size={18} color={theme.primary} />
+            <ThemedText type="smallBold">글자 크기</ThemedText>
+          </View>
+          <View style={[styles.ptBadge, { backgroundColor: theme.backgroundSelected }]}>
+            <ThemedText type="caption" themeColor="primary" style={styles.bold800}>
+              {pt}pt
+            </ThemedText>
+          </View>
+        </View>
+        <ThemedText type="caption" themeColor="textMuted">
+          슬라이더를 움직이거나 ‘가’를 눌러 조절하세요
+        </ThemedText>
+
+        <View style={styles.sliderRow}>
+          <Pressable onPress={() => setPt(pt - 1)} hitSlop={12} style={styles.gaBtn}>
+            <Text style={{ fontSize: 16, color: theme.textSecondary, fontWeight: '700' }}>가</Text>
+          </Pressable>
+          <View style={styles.trackWrap} onLayout={(e) => setTrackW(e.nativeEvent.layout.width)} {...pan.panHandlers}>
+            <View style={[styles.track, { backgroundColor: theme.border }]} />
+            <View style={[styles.trackFill, { width: `${frac * 100}%`, backgroundColor: theme.primary }]} />
+            <View style={[styles.thumb, { left: `${frac * 100}%`, backgroundColor: theme.primary, borderColor: theme.card }]} />
+          </View>
+          <Pressable onPress={() => setPt(pt + 1)} hitSlop={12} style={styles.gaBtn}>
+            <Text style={{ fontSize: 30, color: theme.textSecondary, fontWeight: '800' }}>가</Text>
+          </Pressable>
+        </View>
+
+        <View style={[styles.previewBox, { backgroundColor: theme.backgroundSelected }]}>
+          <ThemedText type="caption" themeColor="textMuted">미리보기</ThemedText>
+          <ThemedText type="body" style={styles.centerText}>
+            주님의 은혜가 늘 함께하시길 기도합니다.
+          </ThemedText>
+        </View>
+      </Card>
+    </View>
   );
 }
 
@@ -199,4 +267,25 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.two,
     borderRadius: Radius.small,
   },
+
+  // 글자 크기
+  rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  fsHead: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  bold800: { fontWeight: '800' },
+  ptBadge: { paddingHorizontal: Spacing.two, paddingVertical: 2, borderRadius: Radius.pill },
+  sliderRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, marginTop: Spacing.two },
+  gaBtn: { width: 34, alignItems: 'center', justifyContent: 'center' },
+  trackWrap: { flex: 1, height: 36, justifyContent: 'center' },
+  track: { height: 6, borderRadius: 3 },
+  trackFill: { position: 'absolute', left: 0, height: 6, borderRadius: 3 },
+  thumb: {
+    position: 'absolute',
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    marginLeft: -13,
+    borderWidth: 3,
+  },
+  previewBox: { marginTop: Spacing.three, padding: Spacing.three, borderRadius: Radius.medium, gap: Spacing.one, alignItems: 'center' },
+  centerText: { textAlign: 'center' },
 });

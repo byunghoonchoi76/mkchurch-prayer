@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, useAuth } from '@/lib/auth';
+import { FontScaleProvider } from '@/lib/font-scale';
 import { registerServiceWorker } from '@/lib/register-sw';
 
 SplashScreen.preventAutoHideAsync();
@@ -77,12 +78,14 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <AuthProvider>
-        <ThemeProvider value={navigationTheme}>
-          <StatusBar style={isDark ? 'light' : 'dark'} />
-          <RootNavigator />
-        </ThemeProvider>
-      </AuthProvider>
+      <FontScaleProvider>
+        <AuthProvider>
+          <ThemeProvider value={navigationTheme}>
+            <StatusBar style={isDark ? 'light' : 'dark'} />
+            <RootNavigator />
+          </ThemeProvider>
+        </AuthProvider>
+      </FontScaleProvider>
     </GestureHandlerRootView>
   );
 }
