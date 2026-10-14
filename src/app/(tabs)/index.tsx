@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PrayerDial } from '@/components/prayer-dial';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
-import { Button, Card, ListRow } from '@/components/ui';
+import { Button, Card } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth';
@@ -27,7 +27,6 @@ type PrayerTime = ReturnType<typeof usePrayerTime>;
 
 /** 나의 기도 — 기도 타이머 + 오늘의 기도 + 개인 기도제목 */
 export default function MyPrayerScreen() {
-  const router = useRouter();
   // 개인 + 공동 참여 시간을 하나로 합쳐 봅니다.
   const active = useAllPrayerTime();
   const { goal } = useWeeklyGoal('personal');
@@ -40,17 +39,8 @@ export default function MyPrayerScreen() {
       {/* 오늘의 기도 — 기도제목을 하나씩 넘기며 기도 */}
       <TodayCard />
 
-      <Card>
-        <ListRow
-          icon="flower-outline"
-          title="개인 기도제목"
-          subtitle="나만의 기도제목을 적고 상태·분류로 관리해요"
-          onPress={() => router.push('/prayer/personal')}
-        />
-      </Card>
-
       <ThemedText type="caption" themeColor="textMuted" style={{ textAlign: 'center', marginTop: Spacing.one }}>
-        기도 시간 기록과 통계는 ‘기도 기록’ 탭에서 볼 수 있어요.
+        기도제목은 ‘기도제목’ 탭에서, 기록·통계는 ‘기도 기록’ 탭에서 볼 수 있어요.
       </ThemedText>
     </Screen>
   );

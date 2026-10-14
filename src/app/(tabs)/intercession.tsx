@@ -6,13 +6,25 @@ import { ThemedText } from '@/components/themed-text';
 import { Card, ListRow, SectionHeader } from '@/components/ui';
 import { useTheme } from '@/hooks/use-theme';
 
-/** 중보기도 — 온 성도가 함께 기도하는 공동·중보 기도제목 */
-export default function IntercessionScreen() {
+/** 기도제목 — 개인 · 공동 · 중보 기도제목을 한곳에서 */
+export default function PrayerTopicsScreen() {
   const router = useRouter();
   const theme = useTheme();
 
   return (
     <Screen>
+      <View>
+        <SectionHeader title="나의 기도제목" />
+        <Card>
+          <ListRow
+            icon="flower-outline"
+            title="개인 기도제목"
+            subtitle="나만의 기도제목을 적고 상태·분류로 관리해요"
+            onPress={() => router.push('/prayer/personal')}
+          />
+        </Card>
+      </View>
+
       <View>
         <SectionHeader title="함께 드리는 기도" />
         <Card>

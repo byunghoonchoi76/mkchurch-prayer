@@ -28,17 +28,17 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: '나의 기도',
-          tabBarLabel: tabLabel('나의 기도'),
+          title: '기도하기',
+          tabBarLabel: tabLabel('기도하기'),
           tabBarIcon: ({ color, size }) => <Ionicons name="heart-outline" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="intercession"
         options={{
-          title: '중보기도',
-          tabBarLabel: tabLabel('중보기도'),
-          tabBarIcon: ({ color, size }) => <Ionicons name="people-outline" size={size} color={color} />,
+          title: '기도제목',
+          tabBarLabel: tabLabel('기도제목'),
+          tabBarIcon: ({ color, size }) => <Ionicons name="list-outline" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
