@@ -87,7 +87,7 @@ export function Badge({
   const theme = useTheme();
   return (
     <View style={[styles.badge, { backgroundColor: theme[tone] + '22', borderColor: theme[tone] + '55' }]}>
-      <ThemedText type="caption" style={{ color: theme[tone], fontWeight: '700' }}>
+      <ThemedText type="caption" fixed style={{ color: theme[tone], fontWeight: '700' }}>
         {label}
       </ThemedText>
     </View>
@@ -142,7 +142,7 @@ export function Button({
       ) : (
         <>
           {icon ? <Ionicons name={icon} size={16} color={foreground} /> : null}
-          <ThemedText type="smallBold" style={{ color: foreground }}>
+          <ThemedText type="smallBold" fixed numberOfLines={1} style={{ color: foreground }}>
             {label}
           </ThemedText>
         </>

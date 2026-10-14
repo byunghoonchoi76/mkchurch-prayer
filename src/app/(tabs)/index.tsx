@@ -36,11 +36,11 @@ export default function MyPrayerScreen() {
   const { goal } = useWeeklyGoal('personal');
 
   return (
-    <Screen>
-      {/* 큰 기도 타이머 — 화면 맨 위, 마치면 결과가 바로 나옵니다 */}
+    <Screen scroll={false} contentStyle={styles.homeCenter}>
+      {/* 큰 기도 타이머 — 화면 세로 중앙 */}
       <TimerCard active={active} goal={goal} />
 
-      <ThemedText type="caption" themeColor="textMuted" style={{ textAlign: 'center', marginTop: Spacing.one }}>
+      <ThemedText type="caption" themeColor="textMuted" style={styles.homeNote}>
         기도제목은 ‘기도제목’ 탭에서, 기록·통계는 ‘기도 기록’ 탭에서 볼 수 있어요.
       </ThemedText>
     </Screen>
@@ -240,7 +240,7 @@ function PrayerFocusModal({
         ]}>
         <PrayerDial seconds={elapsedSeconds} display={display} paused={paused} />
         <View style={styles.dialMetaRow}>
-          <ThemedText type="caption" themeColor="textMuted">
+          <ThemedText type="caption" themeColor="textMuted" fixed>
             오늘 누적 {durationLabel(todaySeconds)}
           </ThemedText>
           {bgmAvailable ? (
@@ -256,7 +256,7 @@ function PrayerFocusModal({
                 size={16}
                 color={bgmEnabled ? theme.primary : theme.textMuted}
               />
-              <ThemedText type="caption" themeColor={bgmEnabled ? 'primary' : 'textMuted'}>
+              <ThemedText type="caption" themeColor={bgmEnabled ? 'primary' : 'textMuted'} fixed>
                 배경음악
               </ThemedText>
               <View style={[styles.bgmTrack, { backgroundColor: bgmEnabled ? theme.primary : theme.border }]}>
@@ -268,11 +268,11 @@ function PrayerFocusModal({
 
         <View style={styles.focusTopicsHead}>
           <Ionicons name="flower-outline" size={16} color={theme.primary} />
-          <ThemedText type="smallBold" themeColor="primary">
+          <ThemedText type="smallBold" themeColor="primary" fixed>
             오늘의 기도
           </ThemedText>
           {count > 1 ? (
-            <ThemedText type="caption" themeColor="textMuted">
+            <ThemedText type="caption" themeColor="textMuted" fixed>
               {pos + 1} / {count}
             </ThemedText>
           ) : null}
@@ -318,13 +318,13 @@ function PrayerFocusModal({
             onPress={onPauseToggle}
             style={({ pressed }) => [styles.pauseBtn, { borderColor: theme.primary, backgroundColor: paused ? theme.primary : 'transparent', opacity: pressed ? 0.85 : 1 }]}>
             <Ionicons name={paused ? 'play' : 'pause'} size={22} color={paused ? theme.onPrimary : theme.primary} />
-            <ThemedText type="subtitle" style={{ color: paused ? theme.onPrimary : theme.primary }}>
+            <ThemedText type="subtitle" fixed numberOfLines={1} style={{ color: paused ? theme.onPrimary : theme.primary }}>
               {paused ? '이어서' : '일시정지'}
             </ThemedText>
           </Pressable>
           <Pressable onPress={onStop} style={({ pressed }) => [styles.stopBtn, { backgroundColor: theme.accent, opacity: pressed ? 0.9 : 1 }]}>
             <Ionicons name="checkmark" size={24} color="#fff" />
-            <ThemedText type="subtitle" style={{ color: '#fff' }}>
+            <ThemedText type="subtitle" fixed numberOfLines={1} style={{ color: '#fff' }}>
               아멘
             </ThemedText>
           </Pressable>
@@ -425,6 +425,10 @@ const styles = StyleSheet.create({
   center: { alignItems: 'center', textAlign: 'center' },
   mt4: { marginTop: 4 },
 
+  // 기도하기 홈 — 다이얼을 세로 중앙에, 안내 문구는 왼쪽 맞춤
+  homeCenter: { justifyContent: 'center' },
+  homeNote: { textAlign: 'left', marginTop: Spacing.two },
+
   // 큰 기도 타이머
   timerCard: { alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.four },
   startImageBtn: { width: 220, height: 220, borderRadius: 110, alignSelf: 'center', overflow: 'hidden' },
@@ -432,7 +436,7 @@ const styles = StyleSheet.create({
 
   // 전체 화면 기도 모드
   focusRoot: { flex: 1, paddingHorizontal: Spacing.four, gap: Spacing.two },
-  dialMetaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' },
+  dialMetaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', flexWrap: 'wrap', rowGap: Spacing.one },
   bgmRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, paddingVertical: Spacing.one },
   bgmTrack: { width: 46, height: 28, borderRadius: 14, padding: 3, justifyContent: 'center' },
   bgmThumb: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#fff' },

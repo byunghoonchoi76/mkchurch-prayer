@@ -7,11 +7,14 @@ import { useFontScale } from '@/lib/font-scale';
 export type ThemedTextProps = TextProps & {
   type?: 'default' | 'title' | 'subtitle' | 'heading' | 'body' | 'small' | 'smallBold' | 'caption' | 'link' | 'code';
   themeColor?: ThemeColor;
+  /** true 면 글자 크기 설정의 영향을 받지 않습니다(버튼·조작부 등 기능 요소용). */
+  fixed?: boolean;
 };
 
-export function ThemedText({ style, type = 'default', themeColor, ...rest }: ThemedTextProps) {
+export function ThemedText({ style, type = 'default', themeColor, fixed, ...rest }: ThemedTextProps) {
   const theme = useTheme();
-  const scale = useFontScale();
+  const globalScale = useFontScale();
+  const scale = fixed ? 1 : globalScale;
 
   // 타입별 기본 크기에 설정한 배율을 곱합니다. (style 로 직접 지정한 크기는 그대로 둬
   // 다이얼·타이머 같은 고정 크기 요소가 깨지지 않게 합니다.)

@@ -274,7 +274,7 @@ export default function TodayPrayerScreen() {
             onPress={paused ? resume : pause}
             style={({ pressed }) => [styles.pauseBtn, { borderColor: theme.primary, backgroundColor: paused ? theme.primary : 'transparent', opacity: pressed ? 0.85 : 1 }]}>
             <Ionicons name={paused ? 'play' : 'pause'} size={20} color={paused ? theme.onPrimary : theme.primary} />
-            <ThemedText type="subtitle" style={{ color: paused ? theme.onPrimary : theme.primary }}>
+            <ThemedText type="subtitle" fixed numberOfLines={1} style={{ color: paused ? theme.onPrimary : theme.primary }}>
               {paused ? '이어서' : '일시정지'}
             </ThemedText>
           </Pressable>
@@ -282,7 +282,7 @@ export default function TodayPrayerScreen() {
             onPress={() => void amen()}
             style={({ pressed }) => [styles.amenBtn, { backgroundColor: theme.accent, opacity: pressed ? 0.9 : 1 }]}>
             <Ionicons name="checkmark" size={24} color="#fff" />
-            <ThemedText type="subtitle" style={{ color: '#fff' }}>
+            <ThemedText type="subtitle" fixed numberOfLines={1} style={{ color: '#fff' }}>
               {index + 1 >= topics.length ? '아멘' : '아멘 · 다음'}
             </ThemedText>
           </Pressable>

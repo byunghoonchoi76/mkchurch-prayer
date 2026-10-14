@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Screen } from '@/components/screen';
@@ -11,7 +11,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth';
 import { dataMode, repository, useAsyncData } from '@/lib/data';
 import { resetSampleData } from '@/lib/data/sample-repository';
-import { MAX_PT, MIN_PT, useFontScaleControl } from '@/lib/font-scale';
+import { FONT_OPTIONS, MAX_PT, MIN_PT, preloadAllFonts, useFontScaleControl, type FontKey } from '@/lib/font-scale';
 import { usePrayerBgm } from '@/lib/prayer-bgm';
 
 export default function SettingsScreen() {
@@ -56,6 +56,8 @@ export default function SettingsScreen() {
       </View>
 
       <FontSizeSettings />
+
+      <FontFamilySettings />
 
       <MusicSettings />
 
@@ -176,6 +178,55 @@ function FontSizeSettings() {
   );
 }
 
+/** 글꼴 — 미리보기를 보며 원하는 글꼴을 고릅니다(앱 전체 적용) */
+function FontFamilySettings() {
+  const theme = useTheme();
+  const { family, setFamily } = useFontScaleControl();
+
+  // 미리보기가 각 글꼴로 보이도록 모든 글꼴을 불러옵니다.
+  useEffect(() => {
+    preloadAllFonts();
+  }, []);
+
+  return (
+    <View>
+      <SectionHeader title="글꼴" />
+      <Card>
+        <ThemedText type="caption" themeColor="textMuted">
+          미리보기를 보고 원하는 글꼴을 고르세요
+        </ThemedText>
+        {FONT_OPTIONS.map((opt, i) => {
+          const selected = family === opt.key;
+          return (
+            <View key={opt.key}>
+              {i > 0 ? <View style={[styles.sep, { backgroundColor: theme.border }]} /> : null}
+              <Pressable onPress={() => setFamily(opt.key as FontKey)} style={styles.fontRow}>
+                <Ionicons
+                  name={selected ? 'radio-button-on' : 'radio-button-off'}
+                  size={22}
+                  color={selected ? theme.primary : theme.textMuted}
+                />
+                <View style={styles.flex}>
+                  <View style={styles.fontLabelRow}>
+                    <ThemedText type="smallBold" style={{ color: selected ? theme.primary : theme.text }}>
+                      {opt.label}
+                    </ThemedText>
+                    <ThemedText type="caption" themeColor="textMuted">
+                      {opt.note}
+                    </ThemedText>
+                  </View>
+                  {/* 미리보기 — 해당 글꼴로 렌더링 */}
+                  <Text style={[styles.fontPreview, { color: theme.text, fontFamily: opt.stack }]}>주님, 오늘도 함께해 주세요</Text>
+                </View>
+              </Pressable>
+            </View>
+          );
+        })}
+      </Card>
+    </View>
+  );
+}
+
 /** 기도 배경음악 — 켜기/끄기 + 음악 선택 + 미리듣기 */
 function MusicSettings() {
   const theme = useTheme();
@@ -288,4 +339,10 @@ const styles = StyleSheet.create({
   },
   previewBox: { marginTop: Spacing.three, padding: Spacing.three, borderRadius: Radius.medium, gap: Spacing.one, alignItems: 'center' },
   centerText: { textAlign: 'center' },
+
+  // 글꼴 선택
+  flex: { flex: 1 },
+  fontRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.two },
+  fontLabelRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, flexWrap: 'wrap' },
+  fontPreview: { fontSize: 18, marginTop: 3 },
 });

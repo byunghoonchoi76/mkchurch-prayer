@@ -25,7 +25,7 @@ export function CategoryChip({ category }: { category: PrayerCategory }) {
   return (
     <View style={[styles.chip, { backgroundColor: color + '1A', borderColor: color + '55' }]}>
       <View style={[styles.dot, { backgroundColor: color }]} />
-      <ThemedText type="caption" style={{ color, fontWeight: '700' }}>
+      <ThemedText type="caption" fixed style={{ color, fontWeight: '700' }}>
         {category}
       </ThemedText>
     </View>
@@ -38,7 +38,7 @@ export function StatusBadge({ status }: { status: PrayerStatus }) {
   const color = theme[STATUS_TONE[status]];
   return (
     <View style={[styles.chip, { backgroundColor: color + '1A', borderColor: color + '55' }]}>
-      <ThemedText type="caption" style={{ color, fontWeight: '700' }}>
+      <ThemedText type="caption" fixed style={{ color, fontWeight: '700' }}>
         {status}
       </ThemedText>
     </View>
@@ -103,7 +103,7 @@ export function StatusPicker({
             {s === '응답됨' && selected ? (
               <Ionicons name="checkmark-circle" size={13} color={color} style={{ marginRight: 3 }} />
             ) : null}
-            <ThemedText type="caption" style={{ color: selected ? color : theme.textMuted, fontWeight: selected ? '800' : '600' }}>
+            <ThemedText type="caption" fixed style={{ color: selected ? color : theme.textMuted, fontWeight: selected ? '800' : '600' }}>
               {s}
             </ThemedText>
           </Pressable>
