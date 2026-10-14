@@ -1,12 +1,23 @@
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { Tabs } from 'expo-router';
 import { Platform, StyleSheet, Text, type ColorValue } from 'react-native';
 
 import { useTheme } from '@/hooks/use-theme';
 
+const PRAY_ICON = require('@/assets/images/tab-pray.png');
+const TOPICS_ICON = require('@/assets/images/tab-topics.png');
+
 /** 한글 받침까지 온전히 보이도록 탭 라벨을 직접 그립니다. */
 function tabLabel(label: string) {
   return ({ color }: { color: ColorValue }) => <Text style={[styles.tabLabel, { color }]}>{label}</Text>;
+}
+
+/** 이미지 탭 아이콘 — 활성/비활성 색(tintColor)으로 칠해집니다. */
+function imageIcon(src: number) {
+  return ({ color, size }: { color: ColorValue; size: number }) => (
+    <Image source={src} style={{ width: size, height: size }} contentFit="contain" tintColor={color as string} />
+  );
 }
 
 export default function TabsLayout() {
@@ -30,7 +41,7 @@ export default function TabsLayout() {
         options={{
           title: '기도하기',
           tabBarLabel: tabLabel('기도하기'),
-          tabBarIcon: ({ color, size }) => <Ionicons name="heart-outline" size={size} color={color} />,
+          tabBarIcon: imageIcon(PRAY_ICON),
         }}
       />
       <Tabs.Screen
@@ -38,7 +49,7 @@ export default function TabsLayout() {
         options={{
           title: '기도제목',
           tabBarLabel: tabLabel('기도제목'),
-          tabBarIcon: ({ color, size }) => <Ionicons name="list-outline" size={size} color={color} />,
+          tabBarIcon: imageIcon(TOPICS_ICON),
         }}
       />
       <Tabs.Screen

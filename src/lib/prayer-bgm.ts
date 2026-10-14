@@ -360,13 +360,12 @@ function listTracks(): string[] {
 /** 곡 순서대로의 제목 (ChurchInfo.prayerBgmUrls 순서와 1:1) */
 const TRACK_NAMES = ['은혜로운 기도', '평안함의 기도', '고요한 기도'];
 
-/** 설정에서 고를 수 있는 배경음악 목록 — 랜덤 · 곡별 · 내장 패드음 */
+/** 설정에서 고를 수 있는 배경음악 목록 — 랜덤 · 곡별 (내장 합성음은 기도와 맞지 않아 제외) */
 export function prayerMusicOptions(): PrayerMusicOption[] {
   const tracks = listTracks();
   const opts: PrayerMusicOption[] = [];
   if (tracks.length > 1) opts.push({ id: 'random', name: '여러 곡 번갈아 (랜덤)' });
   tracks.forEach((_, i) => opts.push({ id: `track-${i}`, name: TRACK_NAMES[i] ?? `음악 ${i + 1}` }));
-  opts.push({ id: 'ambient', name: '잔잔한 음악 (내장)' });
   return opts;
 }
 
@@ -385,7 +384,9 @@ async function loadChoice(): Promise<string> {
   if (!choiceLoaded) {
     try {
       const v = await AsyncStorage.getItem(CHOICE_KEY);
-      if (v) currentChoice = v;
+      // 내장 합성음(ambient)은 더 이상 선택지가 아니므로 기본값으로 되돌립니다.
+      if (v && v !== 'ambient') currentChoice = v;
+      else if (v === 'ambient') currentChoice = defaultMusicId();
     } catch {
       /* noop */
     }
