@@ -27,6 +27,11 @@ export const supabase: SupabaseClient | null = hasSupabaseConfig
         storage: AsyncStorage,
         autoRefreshToken: true,
         persistSession: true,
+        // 기도 앱은 교회 앱과 같은 도메인(github.io)에서 돌지만 로그인 세션은
+        // 따로 보관합니다. (저장 키를 분리하지 않으면 두 앱이 같은 세션을 공유해
+        // 한쪽에서 로그인하면 다른 쪽도 로그인된 것으로 인식되어, 기도 앱에서
+        // 시작(표어) 화면이 건너뛰어지는 문제가 생깁니다.)
+        storageKey: 'guri-mokyang-prayer-auth',
         // 웹에서만 URL 의 인증 파라미터를 읽습니다.
         detectSessionInUrl: Platform.OS === 'web',
       },
