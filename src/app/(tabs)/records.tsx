@@ -144,8 +144,8 @@ function GoalPicker({ goal, onGoal }: { goal: number; onGoal: (n: number) => voi
   return (
     <>
       <Pressable onPress={start} style={[styles.goalLabelBtn, { borderColor: theme.primary, backgroundColor: theme.backgroundSelected }]}>
-        <ThemedText type="caption" themeColor="textMuted">목표 </ThemedText>
-        <ThemedText type="smallBold" themeColor="primary">{goalLabel(goal)}</ThemedText>
+        <ThemedText type="caption" themeColor="textMuted" numberOfLines={1}>목표 </ThemedText>
+        <ThemedText type="smallBold" themeColor="primary" numberOfLines={1} style={styles.flexShrink}>{goalLabel(goal)}</ThemedText>
         <Ionicons name="create-outline" size={14} color={theme.primary} style={{ marginLeft: 4 }} />
       </Pressable>
 
@@ -221,7 +221,9 @@ function CalendarCard({ active }: { active: PrayerTime }) {
   return (
     <View>
       <View style={styles.grassHead}>
-        <SectionHeader title="나의 기도 기록" />
+        <View style={styles.grassHeadTitle}>
+          <SectionHeader title="나의 기도 기록" />
+        </View>
         {active.streak > 0 ? (
           <View style={[styles.streakBadge, { backgroundColor: theme.backgroundSelected }]}>
             <Ionicons name="flame" size={13} color={theme.accent} />
@@ -301,8 +303,10 @@ function AverageCard({ active }: { active: PrayerTime }) {
   return (
     <View>
       <View style={styles.grassHead}>
-        <SectionHeader title="최근 10일 하루 평균 기도 시간" />
-        <ThemedText type="smallBold" themeColor="primary">
+        <View style={styles.grassHeadTitle}>
+          <SectionHeader title="최근 10일 하루 평균 기도 시간" />
+        </View>
+        <ThemedText type="smallBold" themeColor="primary" numberOfLines={1} style={styles.flexShrink}>
           평균 {durationLabel(avg)}
         </ThemedText>
       </View>
@@ -331,17 +335,19 @@ function AverageCard({ active }: { active: PrayerTime }) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  flexShrink: { flexShrink: 1 },
   center: { alignItems: 'center', textAlign: 'center' },
   mt4: { marginTop: 4 },
   menuDivider: { height: StyleSheet.hairlineWidth, marginVertical: Spacing.one },
 
   gaugeCenter: { position: 'absolute', left: 0, right: 0, bottom: 4, alignItems: 'center' },
-  goalRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, marginTop: Spacing.two },
-  goalStep: { width: 30, height: 30, borderRadius: 15, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
+  goalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', columnGap: Spacing.three, rowGap: Spacing.two, marginTop: Spacing.two },
+  goalStep: { width: 36, height: 36, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
   goalLabelBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 6,
+    flexShrink: 1,
+    paddingVertical: 8,
     paddingHorizontal: Spacing.three,
     borderRadius: Radius.pill,
     borderWidth: StyleSheet.hairlineWidth,
@@ -362,8 +368,9 @@ const styles = StyleSheet.create({
   goalInput: { fontSize: 22, fontWeight: '700', textAlign: 'right', minWidth: 120, paddingVertical: 0 },
   goalBtnRow: { flexDirection: 'row', gap: Spacing.two, marginTop: Spacing.four },
 
-  grassHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  streakBadge: { flexDirection: 'row', alignItems: 'center', gap: Spacing.one, paddingHorizontal: Spacing.two, paddingVertical: 3, borderRadius: Radius.pill },
+  grassHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', columnGap: Spacing.two, rowGap: Spacing.one },
+  grassHeadTitle: { flexShrink: 1, minWidth: '55%' },
+  streakBadge: { flexDirection: 'row', alignItems: 'center', gap: Spacing.one, paddingHorizontal: Spacing.two, paddingVertical: 3, borderRadius: Radius.pill, flexShrink: 0 },
   calHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.two },
   calNav: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
   calWeekRow: { flexDirection: 'row', marginBottom: Spacing.one },

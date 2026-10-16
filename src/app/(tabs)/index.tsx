@@ -95,7 +95,7 @@ export default function MyPrayerScreen() {
       <TimerCard active={active} goal={goal} />
 
       <ThemedText type="caption" themeColor="textMuted" style={styles.homeNote}>
-        기도제목은 ‘기도제목’ 탭에서, 기록·통계는 ‘기도 기록’ 탭에서 볼 수 있어요.
+        기도제목과 기록은 아래 탭에서 볼 수 있어요.
       </ThemedText>
     </Screen>
   );
@@ -208,6 +208,7 @@ function TimerCard({ active, goal }: { active: PrayerTime; goal: number }) {
           <ThemedText type="smallBold" themeColor="primary" style={styles.center}>
             눌러서 기도 시작
           </ThemedText>
+          <WeekMini active={active} goal={goal} />
         </>
       ) : (
         <ThemedText type="caption" themeColor="textMuted" style={styles.center}>
@@ -233,6 +234,31 @@ function TimerCard({ active, goal }: { active: PrayerTime; goal: number }) {
 
       <PrayerResultModal seconds={resultSeconds} onClose={() => setResultSeconds(null)} active={active} goal={goal} />
     </Card>
+  );
+}
+
+/** 홈 타이머 카드 안의 '이번 주 기도' 진행 — 목표 달성률을 작게 보여 줍니다. */
+function WeekMini({ active, goal }: { active: PrayerTime; goal: number }) {
+  const theme = useTheme();
+  const week = weekSeconds(active.entries);
+  const pct = goal > 0 ? Math.min(100, Math.round((week / (goal * 60)) * 100)) : 0;
+  return (
+    <View style={styles.weekMini}>
+      <View style={styles.weekRow}>
+        <ThemedText type="caption" themeColor="textSecondary">
+          이번 주 기도
+        </ThemedText>
+        <ThemedText type="smallBold" themeColor="primary" numberOfLines={1} style={styles.flexShrink}>
+          {pct}%
+        </ThemedText>
+      </View>
+      <View style={[styles.weekTrack, { backgroundColor: theme.border }]}>
+        <View style={[styles.weekFill, { width: `${pct}%`, backgroundColor: theme.accent }]} />
+      </View>
+      <ThemedText type="caption" themeColor="textMuted" numberOfLines={1}>
+        {durationLabel(week)} · 목표 {goalLabel(goal)}
+      </ThemedText>
+    </View>
   );
 }
 
@@ -349,11 +375,11 @@ function PrayerFocusModal({
             onPress={() => setPickerOpen(true)}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel="기도제목 고르기"
+            accessibilityLabel="기도제목 선택"
             style={({ pressed }) => [styles.pickBtn, { borderColor: theme.primary + '55', opacity: pressed ? 0.7 : 1 }]}>
             <Ionicons name="options-outline" size={15} color={theme.primary} />
             <ThemedText type="caption" themeColor="primary" fixed numberOfLines={1}>
-              고르기
+              선택
             </ThemedText>
           </Pressable>
         </View>
@@ -384,7 +410,7 @@ function PrayerFocusModal({
           ) : (
             <View style={[styles.focusEmpty, { borderColor: theme.border }]}>
               <ThemedText type="small" themeColor="textMuted" style={styles.center}>
-                표시할 기도제목이 없어요.{'\n'}‘고르기’에서 기도제목을 선택하세요.
+                표시할 기도제목이 없어요.{'\n'}‘선택’에서 기도제목을 골라 보세요.
               </ThemedText>
             </View>
           )}
@@ -454,7 +480,7 @@ function TodayPrayerPicker({
             { backgroundColor: theme.background, borderColor: theme.border, paddingBottom: insets.bottom + Spacing.three },
           ]}>
           <View style={styles.pickerHead}>
-            <ThemedText type="heading">오늘의 기도 고르기</ThemedText>
+            <ThemedText type="heading">오늘의 기도 선택</ThemedText>
             <Pressable onPress={onClose} hitSlop={8} accessibilityLabel="닫기">
               <Ionicons name="close" size={24} color={theme.textMuted} />
             </Pressable>
@@ -467,9 +493,11 @@ function TodayPrayerPicker({
             {TODAY_PRAYER_ORDER.map((kind) => {
               const list = byKind[kind] ?? [];
               const all = isCategoryAll(selection, kind);
+              // 공동 기도제목은 '전체'만 — 개별 선택 없이 모두 함께 표시합니다.
+              const allowIndividual = kind !== 'communal';
               return (
                 <View key={kind} style={styles.pickerGroup}>
-                  {/* 카테고리 헤더 + '전체' 토글 */}
+                  {/* 카테고리 헤더 + 켜고 끄기 ('전체' 토글) */}
                   <Pressable
                     onPress={() => onChange(toggleCategoryAll(selection, kind))}
                     style={[styles.pickerGroupHead, { borderColor: theme.border, backgroundColor: theme.backgroundElement }]}>
@@ -479,20 +507,24 @@ function TodayPrayerPicker({
                         size={22}
                         color={all ? theme.primary : theme.textMuted}
                       />
-                      <ThemedText type="smallBold">{TODAY_PRAYER_LABEL[kind].long}</ThemedText>
-                      <View style={[styles.pickerAllTag, { backgroundColor: all ? theme.primary : theme.border }]}>
-                        <ThemedText type="caption" fixed style={{ color: all ? theme.onPrimary : theme.textMuted, fontWeight: '700' }}>
-                          전체
-                        </ThemedText>
-                      </View>
+                      <ThemedText type="smallBold" numberOfLines={1} style={styles.flexShrink}>
+                        {TODAY_PRAYER_LABEL[kind].long}
+                      </ThemedText>
+                      {allowIndividual ? (
+                        <View style={[styles.pickerAllTag, { backgroundColor: all ? theme.primary : theme.border }]}>
+                          <ThemedText type="caption" fixed style={{ color: all ? theme.onPrimary : theme.textMuted, fontWeight: '700' }}>
+                            전체
+                          </ThemedText>
+                        </View>
+                      ) : null}
                     </View>
                     <ThemedText type="caption" themeColor="textMuted" fixed>
                       {list.length}개
                     </ThemedText>
                   </Pressable>
 
-                  {/* 전체가 아니면, 개별 제목을 고릅니다 */}
-                  {!all
+                  {/* 개인·중보: '전체'가 아니면 원하는 제목만 고릅니다. (공동은 개별 선택 없음) */}
+                  {allowIndividual && !all
                     ? list.length === 0
                       ? (
                         <ThemedText type="caption" themeColor="textMuted" style={styles.pickerEmpty}>
@@ -615,6 +647,7 @@ function ResultStat({ label, value, theme }: { label: string; value: string; the
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  flexShrink: { flexShrink: 1 },
   center: { alignItems: 'center', textAlign: 'center' },
   mt4: { marginTop: 4 },
 
@@ -626,6 +659,11 @@ const styles = StyleSheet.create({
   timerCard: { alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.four },
   startImageBtn: { width: 220, height: 220, borderRadius: 110, alignSelf: 'center', overflow: 'hidden' },
   startImage: { width: '100%', height: '100%' },
+  // 홈 '이번 주 기도' 미니 진행
+  weekMini: { width: '100%', maxWidth: 320, gap: Spacing.one, marginTop: Spacing.one },
+  weekRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  weekTrack: { height: 8, borderRadius: Radius.pill, overflow: 'hidden' },
+  weekFill: { height: '100%', borderRadius: Radius.pill },
 
   // 전체 화면 기도 모드
   focusRoot: { flex: 1, paddingHorizontal: Spacing.four, gap: Spacing.two },
@@ -736,6 +774,6 @@ const styles = StyleSheet.create({
   resultGoalBox: { borderRadius: Radius.medium, padding: Spacing.three, gap: Spacing.two, marginTop: Spacing.two },
   resultTrack: { height: 10, borderRadius: Radius.pill, overflow: 'hidden' },
   resultFill: { height: '100%', borderRadius: Radius.pill },
-  resultStats: { flexDirection: 'row', gap: Spacing.two, marginTop: Spacing.one, marginBottom: Spacing.two },
-  resultStat: { flex: 1, alignItems: 'center', paddingVertical: Spacing.two, borderRadius: Radius.medium, borderWidth: StyleSheet.hairlineWidth },
+  resultStats: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two, marginTop: Spacing.one, marginBottom: Spacing.two },
+  resultStat: { flexGrow: 1, flexBasis: '46%', minWidth: 72, alignItems: 'center', paddingVertical: Spacing.two, borderRadius: Radius.medium, borderWidth: StyleSheet.hairlineWidth },
 });
