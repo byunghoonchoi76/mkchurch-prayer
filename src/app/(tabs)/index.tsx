@@ -208,7 +208,6 @@ function TimerCard({ active, goal }: { active: PrayerTime; goal: number }) {
           <ThemedText type="smallBold" themeColor="primary" style={styles.center}>
             눌러서 기도 시작
           </ThemedText>
-          <WeekMini active={active} goal={goal} />
         </>
       ) : (
         <ThemedText type="caption" themeColor="textMuted" style={styles.center}>
@@ -234,31 +233,6 @@ function TimerCard({ active, goal }: { active: PrayerTime; goal: number }) {
 
       <PrayerResultModal seconds={resultSeconds} onClose={() => setResultSeconds(null)} active={active} goal={goal} />
     </Card>
-  );
-}
-
-/** 홈 타이머 카드 안의 '이번 주 기도' 진행 — 목표 달성률을 작게 보여 줍니다. */
-function WeekMini({ active, goal }: { active: PrayerTime; goal: number }) {
-  const theme = useTheme();
-  const week = weekSeconds(active.entries);
-  const pct = goal > 0 ? Math.min(100, Math.round((week / (goal * 60)) * 100)) : 0;
-  return (
-    <View style={styles.weekMini}>
-      <View style={styles.weekRow}>
-        <ThemedText type="caption" themeColor="textSecondary">
-          이번 주 기도
-        </ThemedText>
-        <ThemedText type="smallBold" themeColor="primary" numberOfLines={1} style={styles.flexShrink}>
-          {pct}%
-        </ThemedText>
-      </View>
-      <View style={[styles.weekTrack, { backgroundColor: theme.border }]}>
-        <View style={[styles.weekFill, { width: `${pct}%`, backgroundColor: theme.accent }]} />
-      </View>
-      <ThemedText type="caption" themeColor="textMuted" numberOfLines={1}>
-        {durationLabel(week)} · 목표 {goalLabel(goal)}
-      </ThemedText>
-    </View>
   );
 }
 
@@ -659,11 +633,6 @@ const styles = StyleSheet.create({
   timerCard: { alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.four },
   startImageBtn: { width: 220, height: 220, borderRadius: 110, alignSelf: 'center', overflow: 'hidden' },
   startImage: { width: '100%', height: '100%' },
-  // 홈 '이번 주 기도' 미니 진행
-  weekMini: { width: '100%', maxWidth: 320, gap: Spacing.one, marginTop: Spacing.one },
-  weekRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  weekTrack: { height: 8, borderRadius: Radius.pill, overflow: 'hidden' },
-  weekFill: { height: '100%', borderRadius: Radius.pill },
 
   // 전체 화면 기도 모드
   focusRoot: { flex: 1, paddingHorizontal: Spacing.four, gap: Spacing.two },
