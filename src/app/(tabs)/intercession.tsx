@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
+import { HeroBanner } from '@/components/hero-banner';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { Card, ListRow, SectionHeader } from '@/components/ui';
@@ -9,6 +10,9 @@ import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth';
 import { dataMode, repository, useAsyncData } from '@/lib/data';
+
+/** 기도제목 화면 상단 배너 이미지 (두 손 들어 기도) */
+const TOPICS_HERO = require('@/assets/images/prayer-topics-hero.jpg');
 
 /** 기도제목 — 개인 · 공동 · 중보 기도제목을 한곳에서 */
 export default function PrayerTopicsScreen() {
@@ -34,6 +38,11 @@ export default function PrayerTopicsScreen() {
 
   return (
     <Screen onRefresh={counts.reload}>
+      <HeroBanner imageSource={TOPICS_HERO} height={168}>
+        <ThemedText style={styles.heroTitle}>쉬지 말고 기도하라</ThemedText>
+        <ThemedText style={styles.heroSubtitle}>서로를 위해 함께 기도해요 · 살전 5:17</ThemedText>
+      </HeroBanner>
+
       <View>
         <SectionHeader title="나의 기도" />
         <Card>
@@ -91,3 +100,23 @@ function CountRight({ n }: { n?: number }) {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  heroTitle: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: -0.4,
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  heroSubtitle: {
+    color: 'rgba(255,255,255,0.92)',
+    fontSize: 13,
+    marginTop: 3,
+    textShadowColor: 'rgba(0,0,0,0.45)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+});
