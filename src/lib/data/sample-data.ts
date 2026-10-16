@@ -414,6 +414,14 @@ export const sampleCommunalPrayers: CommunalPrayer[] = [
     sortOrder: 8,
     createdAt: dateTime(30),
   },
+  {
+    id: 'communal-9',
+    title: '예수의 피, 예수의 피, 예수의 보혈, 생수의 강',
+    body: '',
+    totalMinutes: 0,
+    sortOrder: 9,
+    createdAt: dateTime(30),
+  },
 ];
 
 export const sampleStaff: StaffMember[] = [

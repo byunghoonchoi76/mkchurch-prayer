@@ -6,7 +6,7 @@ import { HeroBanner } from '@/components/hero-banner';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, EmptyState, ErrorState, LoadingState } from '@/components/ui';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth';
 import { repository, useAsyncData } from '@/lib/data';
@@ -15,6 +15,7 @@ import type { CommunalPrayer } from '@/lib/data/types';
 /** 공동 기도 — 온 성도가 함께 기도하는 제목 목록입니다. (기도제목 하위 화면) */
 export default function CommunalPrayerScreen() {
   const router = useRouter();
+  const theme = useTheme();
   const { isAdmin } = useAuth();
   const communal = useAsyncData(() => repository.listCommunalPrayers());
   const items = communal.data ?? [];
@@ -27,6 +28,17 @@ export default function CommunalPrayerScreen() {
         <ThemedText style={styles.heroTitle}>공동 기도제목</ThemedText>
         <ThemedText style={styles.heroSubtitle}>온 성도가 함께 마음을 모아 기도하는 제목입니다.</ThemedText>
       </HeroBanner>
+
+      {/* 말씀선포 기도문 안내 — 매일 선포를 격려합니다. */}
+      <View style={[styles.proclaim, { backgroundColor: theme.primary + '12', borderColor: theme.primary + '33' }]}>
+        <View style={styles.proclaimHead}>
+          <Ionicons name="megaphone-outline" size={16} color={theme.primary} />
+          <ThemedText type="smallBold" themeColor="primary">말씀선포 기도문</ThemedText>
+        </View>
+        <ThemedText type="small" themeColor="textSecondary">
+          매일 1,000번~10,000번 이상 수시로, 언제 어느 장소에서든 믿음으로 선포해 보세요!
+        </ThemedText>
+      </View>
 
       {isAdmin ? (
         <Button
@@ -80,6 +92,13 @@ function CommunalCard({ item, isAdmin, onEdit }: { item: CommunalPrayer; isAdmin
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  proclaim: {
+    borderRadius: Radius.medium,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Spacing.three,
+    gap: Spacing.one,
+  },
+  proclaimHead: { flexDirection: 'row', alignItems: 'center', gap: Spacing.one },
   heroTitle: {
     color: '#fff',
     fontSize: 26,

@@ -14,9 +14,10 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth';
 import { dataMode, repository, useAsyncData } from '@/lib/data';
-import type { PrayerRequest } from '@/lib/data/types';
+import type { CommunalPrayer, PrayerCategory, PrayerRequest } from '@/lib/data/types';
 import { durationLabel, stackedDuration } from '@/lib/format';
 import { usePrayerBgm } from '@/lib/prayer-bgm';
+import { TODAY_PRAYER_OPTIONS, useTodayPrayerKind, type TodayPrayerKind } from '@/lib/today-prayer';
 import { useWeeklyGoal } from '@/lib/prayer-goal';
 import { useAllPrayerTime, usePrayerTime } from '@/lib/prayer-log';
 import { allTimeSeconds, goalLabel, monthSeconds, weekSeconds } from '@/lib/prayer-stats';
@@ -28,6 +29,32 @@ const START_IMAGE = require('@/assets/images/prayer-start.png');
 const TOPIC_ROTATE_MS = 8000;
 
 type PrayerTime = ReturnType<typeof usePrayerTime>;
+
+/** '오늘의 기도'에서 돌려 가며 보여 주는 한 장(개인·공동·중보 공통 모양). */
+type FocusTopic = { id: string; title: string; body: string; category?: PrayerCategory; answered?: boolean };
+
+const requestToTopic = (r: PrayerRequest): FocusTopic => ({
+  id: r.id,
+  title: r.title,
+  body: r.body,
+  category: r.category,
+  answered: r.answered,
+});
+const communalToTopic = (c: CommunalPrayer): FocusTopic => ({ id: c.id, title: c.title, body: c.body });
+
+/** 선택한 종류에 맞는 기도제목 목록을 불러옵니다. */
+function loadTopics(kind: TodayPrayerKind): Promise<FocusTopic[]> {
+  if (kind === 'communal') return repository.listCommunalPrayers().then((xs) => xs.map(communalToTopic));
+  if (kind === 'intercession') return repository.listSharedPrayerRequests().then((xs) => xs.map(requestToTopic));
+  return repository.listMyPrayerRequests().then((xs) => xs.map(requestToTopic));
+}
+
+/** 목록이 비었을 때 안내 문구 — 종류별로 다르게. */
+const EMPTY_MESSAGE: Record<TodayPrayerKind, string> = {
+  personal: '개인 기도제목을 추가하면\n이곳에서 함께 기도할 수 있어요.',
+  communal: '등록된 공동 기도제목이 없어요.',
+  intercession: '등록된 중보기도제목이 없어요.',
+};
 
 /** 기도하기 — 기도 타이머. 다이얼을 누르면 전체 화면 기도 모드로 들어갑니다. */
 export default function MyPrayerScreen() {
@@ -59,12 +86,15 @@ function TimerCard({ active, goal }: { active: PrayerTime; goal: number }) {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [resultSeconds, setResultSeconds] = useState<number | null>(null);
 
+  // 사용자가 고른 '오늘의 기도' 종류(개인·공동·중보). 기기에 저장되어 다음에도 유지됩니다.
+  const { kind, setKind } = useTodayPrayerKind();
+
   const currentMs = () => baseRef.current + (segStartRef.current !== null ? Date.now() - segStartRef.current : 0);
 
-  // 전체 화면 기도 중에 함께 볼 '나의 기도제목' (로그인 안 하면 비움)
-  const topics = useAsyncData<PrayerRequest[]>(
-    () => (dataMode === 'supabase' && !user ? Promise.resolve([]) : repository.listMyPrayerRequests()),
-    [user],
+  // 전체 화면 기도 중에 함께 볼 기도제목 — 고른 종류에 따라 바뀝니다. (로그인 필요한 경우 비움)
+  const topics = useAsyncData<FocusTopic[]>(
+    () => (dataMode === 'supabase' && !user ? Promise.resolve([]) : loadTopics(kind)),
+    [user, kind],
   );
 
   const begin = () => {
@@ -166,6 +196,8 @@ function TimerCard({ active, goal }: { active: PrayerTime; goal: number }) {
         onPauseToggle={paused ? resume : pause}
         todaySeconds={active.todayMinutes}
         topics={topics.data ?? []}
+        kind={kind}
+        onKindChange={setKind}
         onStop={() => void stop()}
         bgmAvailable={bgm.available}
         bgmEnabled={bgm.enabled}
@@ -186,6 +218,8 @@ function PrayerFocusModal({
   onPauseToggle,
   todaySeconds,
   topics,
+  kind,
+  onKindChange,
   onStop,
   bgmAvailable,
   bgmEnabled,
@@ -197,7 +231,9 @@ function PrayerFocusModal({
   paused: boolean;
   onPauseToggle: () => void;
   todaySeconds: number;
-  topics: PrayerRequest[];
+  topics: FocusTopic[];
+  kind: TodayPrayerKind;
+  onKindChange: (kind: TodayPrayerKind) => void;
   onStop: () => void;
   bgmAvailable: boolean;
   bgmEnabled: boolean;
@@ -212,10 +248,10 @@ function PrayerFocusModal({
   const [topicIdx, setTopicIdx] = useState(0);
   const count = ordered.length;
 
-  // 기도 모드가 열릴 때마다 처음 제목부터 시작합니다.
+  // 기도 모드가 열릴 때, 또 종류를 바꿀 때 처음 제목부터 시작합니다.
   useEffect(() => {
     if (visible) setTopicIdx(0);
-  }, [visible]);
+  }, [visible, kind]);
 
   // 일정 시간(TOPIC_ROTATE_MS)마다 다음 제목으로. 일시정지 중에는 멈춥니다.
   useEffect(() => {
@@ -278,15 +314,36 @@ function PrayerFocusModal({
           ) : null}
         </View>
 
+        {/* 개인 · 공동 · 중보 중에서 골라 봅니다. (고른 종류는 저장되어 다음에도 유지) */}
+        <View style={[styles.kindSegment, { borderColor: theme.border, backgroundColor: theme.backgroundElement }]}>
+          {TODAY_PRAYER_OPTIONS.map((o) => {
+            const sel = o.kind === kind;
+            return (
+              <Pressable
+                key={o.kind}
+                onPress={() => onKindChange(o.kind)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: sel }}
+                style={[styles.kindItem, sel && { backgroundColor: theme.primary + '22', borderColor: theme.primary }]}>
+                <ThemedText type="caption" fixed numberOfLines={1} style={{ color: sel ? theme.primary : theme.textMuted, fontWeight: sel ? '800' : '600' }}>
+                  {o.label}
+                </ThemedText>
+              </Pressable>
+            );
+          })}
+        </View>
+
         <View style={styles.focusTopicArea}>
           {current ? (
             <Pressable
               onPress={() => count > 1 && setTopicIdx((i) => (i + 1) % count)}
               style={[styles.focusTopicCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-              <View style={styles.focusTopicMeta}>
-                <CategoryChip category={current.category} />
-                {current.answered ? <Ionicons name="checkmark-circle" size={16} color={theme.success} /> : null}
-              </View>
+              {current.category || current.answered ? (
+                <View style={styles.focusTopicMeta}>
+                  {current.category ? <CategoryChip category={current.category} /> : null}
+                  {current.answered ? <Ionicons name="checkmark-circle" size={16} color={theme.success} /> : null}
+                </View>
+              ) : null}
               <ThemedText type="subtitle" style={[styles.center, current.answered && styles.focusAnswered]}>
                 {current.title}
               </ThemedText>
@@ -299,7 +356,7 @@ function PrayerFocusModal({
           ) : (
             <View style={[styles.focusEmpty, { borderColor: theme.border }]}>
               <ThemedText type="small" themeColor="textMuted" style={styles.center}>
-                기도제목을 추가하면{'\n'}이곳에서 함께 기도할 수 있어요.
+                {EMPTY_MESSAGE[kind]}
               </ThemedText>
             </View>
           )}
@@ -441,6 +498,23 @@ const styles = StyleSheet.create({
   bgmTrack: { width: 46, height: 28, borderRadius: 14, padding: 3, justifyContent: 'center' },
   bgmThumb: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#fff' },
   focusTopicsHead: { flexDirection: 'row', alignItems: 'center', gap: Spacing.one, marginTop: Spacing.two },
+  kindSegment: {
+    flexDirection: 'row',
+    borderRadius: Radius.pill,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 3,
+    gap: 3,
+    marginTop: Spacing.one,
+  },
+  kindItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Spacing.two,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
   focusTopicArea: { flex: 1, justifyContent: 'center', gap: Spacing.three },
   focusTopicCard: {
     borderRadius: Radius.large,
