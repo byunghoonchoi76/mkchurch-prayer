@@ -75,6 +75,41 @@ async function loadAllTopics(): Promise<TopicsByKind> {
   };
 }
 
+/**
+ * '오늘의 기도' 글자를 읽기 쉽게 줄로 나눕니다.
+ * - 문장이 끝나면(. ! ?) 줄을 바꾸고,
+ * - 한 줄이 길고 쉼표가 있으면 가운데 쉼표에서 한 번 더 나눕니다.
+ */
+function formatTopicText(text: string): string {
+  if (!text) return text;
+  // 1) 문장이 끝나면(. ! ?) 줄바꿈
+  const lines1 = text.replace(/([.!?])\s+/g, '$1\n').split('\n');
+  // 2) 한 줄이 길고 쉼표가 있으면 첫 쉼표에서 나눔
+  const lines2: string[] = [];
+  for (const line of lines1) {
+    if (line.length > 16 && line.includes(', ')) {
+      const i = line.indexOf(', ');
+      lines2.push(`${line.slice(0, i + 1)}`, line.slice(i + 2));
+    } else {
+      lines2.push(line);
+    }
+  }
+  // 3) 그래도 긴 줄은 가운데에 가까운 띄어쓰기에서 한 번 더 나눠 두 줄로
+  return lines2.map(balanceLine).join('\n');
+}
+
+/** 긴 한 줄을 가운데에 가장 가까운 띄어쓰기에서 두 줄로 나눕니다. */
+function balanceLine(line: string): string {
+  if (line.length <= 14) return line;
+  const mid = line.length / 2;
+  let best = -1;
+  for (let i = 0; i < line.length; i += 1) {
+    if (line[i] === ' ' && (best === -1 || Math.abs(i - mid) < Math.abs(best - mid))) best = i;
+  }
+  if (best === -1) return line;
+  return `${line.slice(0, best)}\n${line.slice(best + 1)}`;
+}
+
 /** 선택(전체 카테고리 + 개별 ID)에 맞는 기도제목만 순서대로 모읍니다. */
 function selectedTopics(byKind: TopicsByKind, sel: TodaySelection): FocusTopic[] {
   const out: FocusTopic[] = [];
@@ -383,11 +418,11 @@ function PrayerFocusModal({
                 {current.answered ? <Ionicons name="checkmark-circle" size={16} color={theme.success} /> : null}
               </View>
               <ThemedText type="subtitle" style={[styles.center, current.answered && styles.focusAnswered]}>
-                {current.title}
+                {formatTopicText(current.title)}
               </ThemedText>
               {current.body ? (
                 <ThemedText type="small" themeColor="textSecondary" style={[styles.center, current.answered && styles.focusAnswered]}>
-                  {current.body}
+                  {formatTopicText(current.body)}
                 </ThemedText>
               ) : null}
             </Pressable>

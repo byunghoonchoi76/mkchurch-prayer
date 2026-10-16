@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, PanResponder, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
@@ -13,6 +13,8 @@ import { dataMode, repository, useAsyncData } from '@/lib/data';
 import { resetSampleData } from '@/lib/data/sample-repository';
 import { FONT_OPTIONS, MAX_PT, MIN_PT, preloadAllFonts, useFontScaleControl, type FontKey } from '@/lib/font-scale';
 import { usePrayerBgm } from '@/lib/prayer-bgm';
+import { GOAL_CONFIG, useWeeklyGoal } from '@/lib/prayer-goal';
+import { goalLabel } from '@/lib/prayer-stats';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -54,6 +56,8 @@ export default function SettingsScreen() {
           />
         </Card>
       </View>
+
+      <GoalSettings />
 
       <FontSizeSettings />
 
@@ -114,6 +118,99 @@ export default function SettingsScreen() {
 }
 
 /** 글자 크기 — 슬라이더로 앱 전체 글자 크기를 조절(어르신 가독성) */
+/** 주간 기도 목표 시간 — '기도 기록'의 이번 주 달성률 기준이 됩니다. */
+function GoalSettings() {
+  const theme = useTheme();
+  const { goal, setGoal } = useWeeklyGoal('personal');
+  const cfg = GOAL_CONFIG.personal;
+  const maxHours = Math.round(cfg.max / 60);
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState('');
+  const [error, setError] = useState<string | undefined>();
+  const [saving, setSaving] = useState(false);
+
+  const start = () => {
+    setText(String(Math.round((goal / 60) * 10) / 10));
+    setError(undefined);
+    setOpen(true);
+  };
+  const apply = async () => {
+    const hours = parseFloat(text.replace(/,/g, '').trim());
+    if (!Number.isFinite(hours) || hours <= 0) {
+      setError('시간을 숫자로 입력해 주세요.');
+      return;
+    }
+    setSaving(true);
+    setError(undefined);
+    try {
+      await setGoal(Math.round(hours * 60));
+      setOpen(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '저장하지 못했습니다.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <View>
+      <SectionHeader title="기도 목표" />
+      <Card>
+        <ThemedText type="smallBold">주간 기도 목표</ThemedText>
+        <ThemedText type="caption" themeColor="textSecondary">
+          일주일 동안 기도할 목표 시간이에요. ‘기도 기록’의 달성률에 쓰입니다.
+        </ThemedText>
+        <View style={styles.goalStepRow}>
+          <Pressable onPress={() => void setGoal(goal - cfg.step)} hitSlop={8} style={[styles.goalStep, { borderColor: theme.border }]}>
+            <Ionicons name="remove" size={18} color={theme.textSecondary} />
+          </Pressable>
+          <Pressable onPress={start} style={[styles.goalValueBtn, { borderColor: theme.primary, backgroundColor: theme.backgroundSelected }]}>
+            <ThemedText type="caption" themeColor="textMuted" numberOfLines={1}>목표 </ThemedText>
+            <ThemedText type="smallBold" themeColor="primary" numberOfLines={1} style={styles.flexShrink}>{goalLabel(goal)}</ThemedText>
+            <Ionicons name="create-outline" size={14} color={theme.primary} style={{ marginLeft: 4 }} />
+          </Pressable>
+          <Pressable onPress={() => void setGoal(goal + cfg.step)} hitSlop={8} style={[styles.goalStep, { borderColor: theme.border }]}>
+            <Ionicons name="add" size={18} color={theme.textSecondary} />
+          </Pressable>
+        </View>
+      </Card>
+
+      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+        <Pressable style={styles.goalBackdrop} onPress={() => setOpen(false)}>
+          <Pressable style={[styles.goalSheet, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => {}}>
+            <ThemedText type="smallBold" style={styles.goalCenter}>주간 기도 목표 시간</ThemedText>
+            <ThemedText type="caption" themeColor="textMuted" style={styles.goalCenter}>일주일 동안 기도할 목표 시간이에요.</ThemedText>
+            <View style={[styles.goalInputRow, { borderColor: theme.border, backgroundColor: theme.backgroundElement }]}>
+              <TextInput
+                value={text}
+                onChangeText={setText}
+                keyboardType="numeric"
+                placeholder="0"
+                placeholderTextColor={theme.textMuted}
+                style={[styles.goalInput, { color: theme.text }]}
+                autoFocus
+              />
+              <ThemedText type="small" themeColor="textSecondary">시간</ThemedText>
+            </View>
+            <ThemedText type="caption" themeColor="textMuted" style={styles.goalCenter}>
+              1 ~ {maxHours.toLocaleString('ko-KR')}시간 사이로 입력하세요.
+            </ThemedText>
+            {error ? (
+              <ThemedText type="caption" themeColor="danger" style={styles.goalCenter}>
+                {error}
+              </ThemedText>
+            ) : null}
+            <View style={styles.goalBtnRow}>
+              <Button label="취소" variant="ghost" style={styles.flex} onPress={() => setOpen(false)} />
+              <Button label="저장" style={styles.flex} loading={saving} onPress={() => void apply()} />
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </View>
+  );
+}
+
 function FontSizeSettings() {
   const theme = useTheme();
   const { pt, setPt } = useFontScaleControl();
@@ -311,6 +408,44 @@ function MusicSettings() {
 
 const styles = StyleSheet.create({
   sep: { height: StyleSheet.hairlineWidth, marginVertical: Spacing.one },
+
+  // 기도 목표
+  flexShrink: { flexShrink: 1 },
+  goalCenter: { alignItems: 'center', textAlign: 'center', marginTop: 4 },
+  goalStepRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    columnGap: Spacing.three,
+    rowGap: Spacing.two,
+    marginTop: Spacing.two,
+  },
+  goalStep: { width: 36, height: 36, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
+  goalValueBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 1,
+    paddingVertical: 8,
+    paddingHorizontal: Spacing.three,
+    borderRadius: Radius.pill,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  goalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center', padding: Spacing.five },
+  goalSheet: { width: '86%', maxWidth: 340, borderRadius: Radius.large, borderWidth: StyleSheet.hairlineWidth, padding: Spacing.four, gap: Spacing.one },
+  goalInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.two,
+    marginTop: Spacing.three,
+    paddingVertical: Spacing.three,
+    paddingHorizontal: Spacing.four,
+    borderRadius: Radius.medium,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  goalInput: { fontSize: 22, fontWeight: '700', textAlign: 'right', minWidth: 120, paddingVertical: 0 },
+  goalBtnRow: { flexDirection: 'row', gap: Spacing.two, marginTop: Spacing.four },
   musicRow: {
     flexDirection: 'row',
     alignItems: 'center',
