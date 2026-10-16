@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { HeroBanner } from '@/components/hero-banner';
 import { PrayerDial } from '@/components/prayer-dial';
 import { CategoryChip } from '@/components/prayer-meta';
 import { Screen } from '@/components/screen';
@@ -33,6 +34,8 @@ import { allTimeSeconds, goalLabel, monthSeconds, weekSeconds } from '@/lib/pray
 
 /** 기도 시작 버튼에 쓰는 다이얼 이미지 */
 const START_IMAGE = require('@/assets/images/prayer-start.png');
+/** 기도하기 홈 상단 배너 이미지 (등대 — 빛·인도) */
+const HOME_HERO = require('@/assets/images/prayer-home-hero.jpg');
 
 /** 전체 화면 기도 모드에서 기도제목이 다음으로 넘어가는 간격(ms) */
 const TOPIC_ROTATE_MS = 8000;
@@ -90,13 +93,20 @@ export default function MyPrayerScreen() {
   const { goal } = useWeeklyGoal('personal');
 
   return (
-    <Screen scroll={false} contentStyle={styles.homeCenter}>
-      {/* 큰 기도 타이머 — 화면 세로 중앙 */}
-      <TimerCard active={active} goal={goal} />
+    <Screen scroll={false} contentStyle={styles.home}>
+      {/* 상단 배너 — 등대의 빛(인도·소망) */}
+      <HeroBanner imageSource={HOME_HERO} height={168}>
+        <ThemedText style={styles.heroTitle}>주는 나의 빛, 나의 구원</ThemedText>
+        <ThemedText style={styles.heroSubtitle}>오늘도 기도로 하루를 밝혀요 · 시편 27:1</ThemedText>
+      </HeroBanner>
 
-      <ThemedText type="caption" themeColor="textMuted" style={styles.homeNote}>
-        기도제목과 기록은 아래 탭에서 볼 수 있어요.
-      </ThemedText>
+      {/* 큰 기도 타이머 — 남은 공간의 세로 중앙 */}
+      <View style={styles.homeBody}>
+        <TimerCard active={active} goal={goal} />
+        <ThemedText type="caption" themeColor="textMuted" style={styles.homeNote}>
+          기도제목과 기록은 아래 탭에서 볼 수 있어요.
+        </ThemedText>
+      </View>
     </Screen>
   );
 }
@@ -625,9 +635,27 @@ const styles = StyleSheet.create({
   center: { alignItems: 'center', textAlign: 'center' },
   mt4: { marginTop: 4 },
 
-  // 기도하기 홈 — 다이얼을 세로 중앙에, 안내 문구는 왼쪽 맞춤
-  homeCenter: { justifyContent: 'center' },
-  homeNote: { textAlign: 'left', marginTop: Spacing.two },
+  // 기도하기 홈 — 상단 배너 + 남은 공간에 다이얼 중앙, 안내 문구는 왼쪽 맞춤
+  home: { gap: Spacing.three },
+  homeBody: { flex: 1, justifyContent: 'center', gap: Spacing.three },
+  heroTitle: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: -0.4,
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  heroSubtitle: {
+    color: 'rgba(255,255,255,0.92)',
+    fontSize: 13,
+    marginTop: 3,
+    textShadowColor: 'rgba(0,0,0,0.45)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  homeNote: { textAlign: 'center', marginTop: Spacing.two },
 
   // 큰 기도 타이머
   timerCard: { alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.four },
