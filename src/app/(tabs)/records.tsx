@@ -1,16 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
-import { Button, Card, ListRow, SectionHeader } from '@/components/ui';
+import { Card, ListRow, SectionHeader } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { durationLabel, toDateKey } from '@/lib/format';
-import { GOAL_CONFIG, useWeeklyGoal } from '@/lib/prayer-goal';
+import { useWeeklyGoal } from '@/lib/prayer-goal';
 import { recentDays, useAllPrayerTime, usePrayerTime } from '@/lib/prayer-log';
 import { goalLabel, weekSeconds } from '@/lib/prayer-stats';
 
@@ -22,11 +22,11 @@ type PrayerTime = ReturnType<typeof usePrayerTime>;
 export default function PrayerRecordsScreen() {
   const router = useRouter();
   const active = useAllPrayerTime();
-  const { goal, setGoal } = useWeeklyGoal('personal');
+  const { goal } = useWeeklyGoal('personal');
 
   return (
     <Screen onRefresh={active.reload}>
-      <GaugeCard active={active} goal={goal} onGoal={setGoal} />
+      <GaugeCard active={active} goal={goal} />
       <CalendarCard active={active} />
       <AverageCard active={active} />
 
@@ -54,17 +54,9 @@ function arcPath(cx: number, cy: number, r: number, startDeg: number, endDeg: nu
   return `M ${s.x} ${s.y} A ${r} ${r} 0 ${large} 1 ${e.x} ${e.y}`;
 }
 
-function GaugeCard({
-  active,
-  goal,
-  onGoal,
-}: {
-  active: PrayerTime;
-  goal: number;
-  onGoal: (n: number) => void | Promise<void>;
-}) {
+function GaugeCard({ active, goal }: { active: PrayerTime; goal: number }) {
   const theme = useTheme();
-  const cfg = GOAL_CONFIG.personal;
+  const router = useRouter();
   const week = weekSeconds(active.entries); // 초
   const pct = goal > 0 ? Math.min(1, week / (goal * 60)) : 0;
   const pct100 = Math.round(pct * 100);
@@ -91,97 +83,23 @@ function GaugeCard({
           </View>
         </View>
 
-        <View style={styles.goalRow}>
-          <Pressable onPress={() => void onGoal(goal - cfg.step)} hitSlop={8} style={[styles.goalStep, { borderColor: theme.border }]}>
-            <Ionicons name="remove" size={16} color={theme.textSecondary} />
-          </Pressable>
-          <GoalPicker goal={goal} onGoal={onGoal} />
-          <Pressable onPress={() => void onGoal(goal + cfg.step)} hitSlop={8} style={[styles.goalStep, { borderColor: theme.border }]}>
-            <Ionicons name="add" size={16} color={theme.textSecondary} />
-          </Pressable>
-        </View>
-        <ThemedText type="caption" themeColor="textMuted" style={styles.center}>
+        <ThemedText type="caption" themeColor="textMuted" style={[styles.center, styles.mt4]}>
           이번 주 {durationLabel(week)} 기도했어요.
+        </ThemedText>
+
+        {/* 목표 시간은 '설정'에서 바꿉니다. 여기서는 현재 목표만 보여 주고, 눌러서 설정으로 이동해요. */}
+        <Pressable
+          onPress={() => router.push('/settings')}
+          style={[styles.goalLabelBtn, { borderColor: theme.border, backgroundColor: theme.backgroundSelected }]}>
+          <ThemedText type="caption" themeColor="textMuted" numberOfLines={1}>주간 목표 </ThemedText>
+          <ThemedText type="smallBold" themeColor="primary" numberOfLines={1} style={styles.flexShrink}>{goalLabel(goal)}</ThemedText>
+          <Ionicons name="chevron-forward" size={14} color={theme.textMuted} style={{ marginLeft: 4 }} />
+        </Pressable>
+        <ThemedText type="caption" themeColor="textMuted" style={[styles.center, styles.mt4]}>
+          목표 시간은 ‘설정 › 기도 목표’에서 바꿀 수 있어요.
         </ThemedText>
       </Card>
     </View>
-  );
-}
-
-/** 목표를 눌러 '시간'으로 직접 입력합니다. */
-function GoalPicker({ goal, onGoal }: { goal: number; onGoal: (n: number) => void | Promise<void> }) {
-  const theme = useTheme();
-  const cfg = GOAL_CONFIG.personal;
-  const [open, setOpen] = useState(false);
-  const [text, setText] = useState('');
-  const [error, setError] = useState<string | undefined>();
-  const [saving, setSaving] = useState(false);
-  const maxHours = Math.round(cfg.max / 60);
-
-  const start = () => {
-    setText(String(Math.round((goal / 60) * 10) / 10));
-    setError(undefined);
-    setOpen(true);
-  };
-  const apply = async () => {
-    const hours = parseFloat(text.replace(/,/g, '').trim());
-    if (!Number.isFinite(hours) || hours <= 0) {
-      setError('시간을 숫자로 입력해 주세요.');
-      return;
-    }
-    setSaving(true);
-    setError(undefined);
-    try {
-      await onGoal(Math.round(hours * 60));
-      setOpen(false);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '저장하지 못했습니다.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <>
-      <Pressable onPress={start} style={[styles.goalLabelBtn, { borderColor: theme.primary, backgroundColor: theme.backgroundSelected }]}>
-        <ThemedText type="caption" themeColor="textMuted" numberOfLines={1}>목표 </ThemedText>
-        <ThemedText type="smallBold" themeColor="primary" numberOfLines={1} style={styles.flexShrink}>{goalLabel(goal)}</ThemedText>
-        <Ionicons name="create-outline" size={14} color={theme.primary} style={{ marginLeft: 4 }} />
-      </Pressable>
-
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable style={styles.goalBackdrop} onPress={() => setOpen(false)}>
-          <Pressable style={[styles.goalSheet, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => {}}>
-            <ThemedText type="smallBold" style={styles.center}>기도 목표 시간</ThemedText>
-            <ThemedText type="caption" themeColor="textMuted" style={[styles.center, styles.mt4]}>나의 주간 기도 목표예요.</ThemedText>
-            <View style={[styles.goalInputRow, { borderColor: theme.border, backgroundColor: theme.backgroundElement }]}>
-              <TextInput
-                value={text}
-                onChangeText={setText}
-                keyboardType="numeric"
-                placeholder="0"
-                placeholderTextColor={theme.textMuted}
-                style={[styles.goalInput, { color: theme.text }]}
-                autoFocus
-              />
-              <ThemedText type="small" themeColor="textSecondary">시간</ThemedText>
-            </View>
-            <ThemedText type="caption" themeColor="textMuted" style={[styles.center, styles.mt4]}>
-              1 ~ {maxHours.toLocaleString('ko-KR')}시간 사이로 입력하세요.
-            </ThemedText>
-            {error ? (
-              <ThemedText type="caption" themeColor="danger" style={[styles.center, styles.mt4]}>
-                {error}
-              </ThemedText>
-            ) : null}
-            <View style={styles.goalBtnRow}>
-              <Button label="취소" variant="ghost" style={styles.flex} onPress={() => setOpen(false)} />
-              <Button label="저장" style={styles.flex} loading={saving} onPress={() => void apply()} />
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
-    </>
   );
 }
 
@@ -334,39 +252,22 @@ function AverageCard({ active }: { active: PrayerTime }) {
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
   flexShrink: { flexShrink: 1 },
   center: { alignItems: 'center', textAlign: 'center' },
   mt4: { marginTop: 4 },
-  menuDivider: { height: StyleSheet.hairlineWidth, marginVertical: Spacing.one },
 
   gaugeCenter: { position: 'absolute', left: 0, right: 0, bottom: 4, alignItems: 'center' },
-  goalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', columnGap: Spacing.three, rowGap: Spacing.two, marginTop: Spacing.two },
-  goalStep: { width: 36, height: 36, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
   goalLabelBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'center',
     flexShrink: 1,
+    marginTop: Spacing.three,
     paddingVertical: 8,
     paddingHorizontal: Spacing.three,
     borderRadius: Radius.pill,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  goalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center', padding: Spacing.five },
-  goalSheet: { width: '86%', maxWidth: 340, borderRadius: Radius.large, borderWidth: StyleSheet.hairlineWidth, padding: Spacing.four },
-  goalInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.two,
-    marginTop: Spacing.three,
-    paddingVertical: Spacing.three,
-    paddingHorizontal: Spacing.four,
-    borderRadius: Radius.medium,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  goalInput: { fontSize: 22, fontWeight: '700', textAlign: 'right', minWidth: 120, paddingVertical: 0 },
-  goalBtnRow: { flexDirection: 'row', gap: Spacing.two, marginTop: Spacing.four },
 
   grassHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', columnGap: Spacing.two, rowGap: Spacing.one },
   grassHeadTitle: { flexShrink: 1, minWidth: '55%' },
