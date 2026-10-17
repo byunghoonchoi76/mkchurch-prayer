@@ -113,6 +113,10 @@ export default function SettingsScreen() {
           ) : null}
         </Card>
       </View>
+
+      <ThemedText type="caption" themeColor="textMuted" style={styles.copyright}>
+        © 2026 구리 목양교회.
+      </ThemedText>
     </Screen>
   );
 }
@@ -408,6 +412,7 @@ function MusicSettings() {
 
 const styles = StyleSheet.create({
   sep: { height: StyleSheet.hairlineWidth, marginVertical: Spacing.one },
+  copyright: { textAlign: 'center', marginTop: Spacing.two, marginBottom: Spacing.one },
 
   // 기도 목표
   flexShrink: { flexShrink: 1 },
