@@ -69,9 +69,15 @@ export default function SettingsScreen() {
         <Card>
           <ThemedText type="heading">관리자</ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
-            온 성도가 함께 기도할 공동 기도제목을 등록·수정할 수 있습니다.
+            성도 현황을 보고, 공동 기도제목을 등록·수정할 수 있습니다.
           </ThemedText>
-          <Button label="공동 기도제목 관리" icon="people-outline" onPress={() => router.push('/prayer/communal')} />
+          <Button label="관리자 대시보드" icon="grid-outline" onPress={() => router.push('/admin')} />
+          <Button
+            label="공동 기도제목 관리"
+            icon="people-outline"
+            variant="secondary"
+            onPress={() => router.push('/prayer/communal')}
+          />
         </Card>
       ) : null}
 
