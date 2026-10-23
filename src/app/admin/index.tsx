@@ -6,7 +6,7 @@ import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { Badge, Button, Card, EmptyState, ErrorState, ListRow, LoadingState, SectionHeader } from '@/components/ui';
-import { PARISH_OPTIONS } from '@/constants/church-roles';
+import { PARISH_OPTIONS, POSITION_OPTIONS } from '@/constants/church-roles';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth';
@@ -64,7 +64,21 @@ export default function AdminDashboardScreen() {
             <EmptyState icon="pie-chart-outline" message="집계할 성도가 없습니다." />
           </Card>
         ) : (
-          <ParishStats members={data.members} />
+          <DistributionStats members={data.members} pick={(m) => m.parish} order={PARISH_OPTIONS} />
+        )}
+      </View>
+
+      {/* 직분별 성도 통계 */}
+      <View>
+        <SectionHeader title="직분별 성도 통계" />
+        {summary.loading && !data ? (
+          <LoadingState />
+        ) : !data || data.members.length === 0 ? (
+          <Card>
+            <EmptyState icon="pie-chart-outline" message="집계할 성도가 없습니다." />
+          </Card>
+        ) : (
+          <DistributionStats members={data.members} pick={(m) => m.position} order={POSITION_OPTIONS} />
         )}
       </View>
 
@@ -135,20 +149,32 @@ function StatTile({ icon, label, value }: { icon: React.ComponentProps<typeof Io
   );
 }
 
-/** 교구별 성도 수 — 막대로 분포를 한눈에. */
-function ParishStats({ members }: { members: AppMember[] }) {
+/**
+ * 성도 분포 막대 통계 (교구별·직분별 공통).
+ * pick: 성도에서 분류 값(교구/직분)을 꺼내는 함수. order: 보여 줄 순서 목록.
+ */
+function DistributionStats({
+  members,
+  pick,
+  order,
+}: {
+  members: AppMember[];
+  pick: (m: AppMember) => string | undefined;
+  order: readonly string[];
+}) {
   const theme = useTheme();
 
-  // 교구별 인원 집계 (교구 미입력은 '미지정'으로)
+  // 분류별 인원 집계 (값이 없으면 '미지정'으로)
   const counts = new Map<string, number>();
   for (const m of members) {
-    const key = m.parish && m.parish.trim() ? m.parish.trim() : '미지정';
+    const v = pick(m);
+    const key = v && v.trim() ? v.trim() : '미지정';
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
-  // 정렬: 설정된 교구 순서 → 그 밖의 교구 → '미지정'은 맨 뒤. (인원 0인 교구는 생략)
+  // 정렬: 지정한 순서 → 그 밖의 값 → '미정' · '미지정'은 맨 뒤. (인원 0인 항목은 생략)
   const ordered: string[] = [];
-  for (const p of PARISH_OPTIONS) if (p !== '미정' && counts.has(p)) ordered.push(p);
-  for (const k of counts.keys()) if (!PARISH_OPTIONS.includes(k as (typeof PARISH_OPTIONS)[number]) && k !== '미지정') ordered.push(k);
+  for (const o of order) if (o !== '미정' && counts.has(o)) ordered.push(o);
+  for (const k of counts.keys()) if (!order.includes(k) && k !== '미지정' && k !== '미정') ordered.push(k);
   if (counts.has('미정')) ordered.push('미정');
   if (counts.has('미지정')) ordered.push('미지정');
 
