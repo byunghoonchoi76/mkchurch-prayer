@@ -286,6 +286,10 @@ export interface AppMember {
   id: string;
   name: string;
   role: Role;
+  /** 교구 (선택) — 예: 1교구, 청년, 미정 */
+  parish?: string;
+  /** 직분 (선택) */
+  position?: string;
   /** 가입일 (ISO) */
   createdAt: string;
 }

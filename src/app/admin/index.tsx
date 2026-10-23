@@ -6,6 +6,7 @@ import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { Badge, Button, Card, EmptyState, ErrorState, ListRow, LoadingState, SectionHeader } from '@/components/ui';
+import { PARISH_OPTIONS } from '@/constants/church-roles';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth';
@@ -51,6 +52,20 @@ export default function AdminDashboardScreen() {
       <View style={styles.statRow}>
         <StatTile icon="people-outline" label="가입 성도" value={data ? `${data.memberCount}명` : '…'} />
         <StatTile icon="megaphone-outline" label="공동 기도제목" value={data ? `${data.communalCount}개` : '…'} />
+      </View>
+
+      {/* 교구별 성도 통계 */}
+      <View>
+        <SectionHeader title="교구별 성도 통계" />
+        {summary.loading && !data ? (
+          <LoadingState />
+        ) : !data || data.members.length === 0 ? (
+          <Card>
+            <EmptyState icon="pie-chart-outline" message="집계할 성도가 없습니다." />
+          </Card>
+        ) : (
+          <ParishStats members={data.members} />
+        )}
       </View>
 
       {/* 콘텐츠 관리 */}
@@ -116,6 +131,58 @@ function StatTile({ icon, label, value }: { icon: React.ComponentProps<typeof Io
       <ThemedText type="caption" themeColor="textMuted" fixed>
         {label}
       </ThemedText>
+    </Card>
+  );
+}
+
+/** 교구별 성도 수 — 막대로 분포를 한눈에. */
+function ParishStats({ members }: { members: AppMember[] }) {
+  const theme = useTheme();
+
+  // 교구별 인원 집계 (교구 미입력은 '미지정'으로)
+  const counts = new Map<string, number>();
+  for (const m of members) {
+    const key = m.parish && m.parish.trim() ? m.parish.trim() : '미지정';
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  // 정렬: 설정된 교구 순서 → 그 밖의 교구 → '미지정'은 맨 뒤. (인원 0인 교구는 생략)
+  const ordered: string[] = [];
+  for (const p of PARISH_OPTIONS) if (p !== '미정' && counts.has(p)) ordered.push(p);
+  for (const k of counts.keys()) if (!PARISH_OPTIONS.includes(k as (typeof PARISH_OPTIONS)[number]) && k !== '미지정') ordered.push(k);
+  if (counts.has('미정')) ordered.push('미정');
+  if (counts.has('미지정')) ordered.push('미지정');
+
+  const total = members.length;
+  const max = Math.max(1, ...ordered.map((k) => counts.get(k) ?? 0));
+
+  return (
+    <Card>
+      {ordered.map((label, i) => {
+        const n = counts.get(label) ?? 0;
+        const pct = total > 0 ? Math.round((n / total) * 100) : 0;
+        const muted = label === '미지정' || label === '미정';
+        return (
+          <View key={label} style={[styles.parishRow, i > 0 && styles.parishRowGap]}>
+            <ThemedText type="small" style={styles.parishLabel} numberOfLines={1}>
+              {label}
+            </ThemedText>
+            <View style={[styles.parishTrack, { backgroundColor: theme.backgroundSelected }]}>
+              <View
+                style={[
+                  styles.parishFill,
+                  { width: `${Math.max(6, (n / max) * 100)}%`, backgroundColor: muted ? theme.textMuted : theme.primary },
+                ]}
+              />
+            </View>
+            <ThemedText type="smallBold" style={styles.parishCount} fixed>
+              {n}명
+            </ThemedText>
+            <ThemedText type="caption" themeColor="textMuted" style={styles.parishPct} fixed>
+              {pct}%
+            </ThemedText>
+          </View>
+        );
+      })}
     </Card>
   );
 }
@@ -206,6 +273,15 @@ const styles = StyleSheet.create({
   statRow: { flexDirection: 'row', gap: Spacing.three },
   statTile: { flex: 1, alignItems: 'center', gap: Spacing.one },
   statIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.one },
+
+  // 교구별 통계
+  parishRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  parishRowGap: { marginTop: Spacing.three },
+  parishLabel: { width: 52 },
+  parishTrack: { flex: 1, height: 10, borderRadius: 5, overflow: 'hidden' },
+  parishFill: { height: 10, borderRadius: 5 },
+  parishCount: { width: 40, textAlign: 'right' },
+  parishPct: { width: 36, textAlign: 'right' },
 
   rightRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
 
