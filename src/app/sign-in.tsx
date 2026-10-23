@@ -5,8 +5,10 @@ import { StyleSheet, View } from 'react-native';
 import { ChurchLogo } from '@/components/church-logo';
 import { ConsentCheck } from '@/components/consent-check';
 import { Screen } from '@/components/screen';
+import { SelectField } from '@/components/select-field';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Field } from '@/components/ui';
+import { PARISH_OPTIONS, POSITION_OPTIONS } from '@/constants/church-roles';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { dataMode } from '@/lib/data';
@@ -19,6 +21,8 @@ export default function SignInScreen() {
   const isSupabase = dataMode === 'supabase';
 
   const [name, setName] = useState('');
+  const [parish, setParish] = useState('');
+  const [position, setPosition] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [mode, setMode] = useState<'signIn' | 'signUp'>(params.mode === 'signUp' ? 'signUp' : 'signIn');
@@ -49,7 +53,13 @@ export default function SignInScreen() {
     setError(undefined);
     try {
       if (mode === 'signUp') {
-        const result = await signUp({ name, email, password });
+        const result = await signUp({
+          name,
+          email,
+          password,
+          position: position || undefined,
+          parish: parish || undefined,
+        });
         if (result.needsEmailConfirmation) {
           // 확인 메일을 켜 둔 경우: 화면을 닫지 않고 안내를 남깁니다.
           setNotice(`${email} 로 확인 메일을 보냈습니다. 메일의 링크를 누른 뒤 로그인해 주세요.`);
@@ -76,7 +86,13 @@ export default function SignInScreen() {
       {isSupabase ? (
         <Card>
           <ThemedText type="heading">{mode === 'signUp' ? '회원가입' : '로그인'}</ThemedText>
-          {mode === 'signUp' ? <Field label="이름" value={name} onChangeText={setName} placeholder="홍길동" /> : null}
+          {mode === 'signUp' ? (
+            <>
+              <Field label="이름" value={name} onChangeText={setName} placeholder="홍길동" />
+              <SelectField label="교구" value={parish} options={PARISH_OPTIONS} onChange={setParish} placeholder="교구를 선택하세요" />
+              <SelectField label="직분" value={position} options={POSITION_OPTIONS} onChange={setPosition} placeholder="직분을 선택하세요" />
+            </>
+          ) : null}
           <Field
             label="이메일"
             value={email}

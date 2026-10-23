@@ -11,9 +11,11 @@ export interface AppUser {
   birthDate?: string;
   /** 양력 / 음력 (선택) */
   birthCalendar?: '양력' | '음력';
-  /** 직분 (선택) — 예: 집사, 권사, 장로, 성도 */
+  /** 직분 (선택) — 예: 성도, 집사, 권사, 안수집사, 장로, 전도사, 목사 */
   position?: string;
-  /** 소속 (선택) — 예: 1교구, OO목장 */
+  /** 교구 (선택) — 예: 1교구, 청년, 미정 */
+  parish?: string;
+  /** 소속 (선택) — 예: OO목장, OO부서 */
   affiliation?: string;
 }
 

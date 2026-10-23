@@ -32,9 +32,13 @@ interface AuthContextValue {
     name: string;
     email: string;
     password: string;
+    position?: string;
+    parish?: string;
   }) => Promise<{ needsEmailConfirmation: boolean }>;
-  /** 내 프로필(이름·생년월일·직분·소속) 수정. */
-  updateProfile: (patch: Partial<Pick<AppUser, 'name' | 'birthDate' | 'birthCalendar' | 'position' | 'affiliation'>>) => Promise<void>;
+  /** 내 프로필(이름·생년월일·직분·교구·소속) 수정. */
+  updateProfile: (
+    patch: Partial<Pick<AppUser, 'name' | 'birthDate' | 'birthCalendar' | 'position' | 'parish' | 'affiliation'>>,
+  ) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -51,7 +55,7 @@ async function loadSupabaseUser(): Promise<AppUser | null> {
   // 확장 컬럼 조회가 실패하면 기본 컬럼만 다시 읽습니다.
   const ext = await supabase
     .from('profiles')
-    .select('name, role, birth_date, birth_calendar, position, affiliation')
+    .select('name, role, birth_date, birth_calendar, position, parish, affiliation')
     .eq('id', authUser.id)
     .maybeSingle();
   let profile = ext.data as Record<string, string | null> | null;
@@ -68,6 +72,7 @@ async function loadSupabaseUser(): Promise<AppUser | null> {
     birthDate: profile?.birth_date ?? undefined,
     birthCalendar: (profile?.birth_calendar as AppUser['birthCalendar']) ?? undefined,
     position: profile?.position ?? undefined,
+    parish: profile?.parish ?? undefined,
     affiliation: profile?.affiliation ?? undefined,
   };
 }
@@ -127,14 +132,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(localUser);
   }, []);
 
-  const signUp = useCallback<AuthContextValue['signUp']>(async ({ name, email, password }) => {
+  const signUp = useCallback<AuthContextValue['signUp']>(async ({ name, email, password, position, parish }) => {
     if (!hasSupabaseConfig || !supabase) {
       throw new Error('샘플 모드에서는 가입 없이 바로 시작할 수 있습니다.');
     }
+    // 가입 메타데이터에 직분·교구를 함께 담아 둡니다. (확인 메일 후 프로필 생성 시에도 유지)
+    const meta: Record<string, string> = { name };
+    if (position) meta.position = position;
+    if (parish) meta.parish = parish;
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { name } },
+      options: { data: meta },
     });
     if (error) throw new Error(translateAuthError(error.message));
 
@@ -143,7 +152,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { needsEmailConfirmation: true };
     }
 
-    await supabase.from('profiles').upsert({ id: data.user!.id, name, role: 'member' });
+    await supabase
+      .from('profiles')
+      .upsert({ id: data.user!.id, name, role: 'member', position: position ?? null, parish: parish ?? null });
     setUser(await loadSupabaseUser());
     return { needsEmailConfirmation: false };
   }, []);
@@ -163,6 +174,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (patch.birthDate !== undefined) row.birth_date = patch.birthDate;
       if (patch.birthCalendar !== undefined) row.birth_calendar = patch.birthCalendar;
       if (patch.position !== undefined) row.position = patch.position;
+      if (patch.parish !== undefined) row.parish = patch.parish;
       if (patch.affiliation !== undefined) row.affiliation = patch.affiliation;
       const { error } = await supabase.from('profiles').upsert(row);
       if (error) throw new Error(error.message);

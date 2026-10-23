@@ -3,8 +3,10 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { Screen } from '@/components/screen';
+import { SelectField } from '@/components/select-field';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, EmptyState, Field } from '@/components/ui';
+import { PARISH_OPTIONS, POSITION_OPTIONS } from '@/constants/church-roles';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth';
@@ -21,6 +23,7 @@ export default function ProfileScreen() {
   const [birthDate, setBirthDate] = useState(user?.birthDate ?? '');
   const [birthCalendar, setBirthCalendar] = useState<'양력' | '음력'>(user?.birthCalendar ?? '양력');
   const [position, setPosition] = useState(user?.position ?? '');
+  const [parish, setParish] = useState(user?.parish ?? '');
   const [affiliation, setAffiliation] = useState(user?.affiliation ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
@@ -49,7 +52,8 @@ export default function ProfileScreen() {
         name: name.trim(),
         birthDate: birthDate.trim(),
         birthCalendar,
-        position: position.trim(),
+        position,
+        parish,
         affiliation: affiliation.trim(),
       });
       setDone(true);
@@ -64,7 +68,7 @@ export default function ProfileScreen() {
   return (
     <Screen>
       <ThemedText type="small" themeColor="textSecondary" style={styles.intro}>
-        생년월일·직분·소속은 선택 항목입니다. 입력하신 정보는 교회 안내 목적으로만 사용됩니다.
+        생년월일·교구·직분·소속은 선택 항목입니다. 입력하신 정보는 교회 안내 목적으로만 사용됩니다.
       </ThemedText>
 
       <View style={styles.form}>
@@ -106,8 +110,9 @@ export default function ProfileScreen() {
           />
         </View>
 
-        <Field label="직분 (선택)" value={position} onChangeText={setPosition} placeholder="예) 집사, 권사, 장로, 성도" />
-        <Field label="소속 (선택)" value={affiliation} onChangeText={setAffiliation} placeholder="예) 1교구 · OO목장" />
+        <SelectField label="교구 (선택)" value={parish} options={PARISH_OPTIONS} onChange={setParish} placeholder="교구를 선택하세요" />
+        <SelectField label="직분 (선택)" value={position} options={POSITION_OPTIONS} onChange={setPosition} placeholder="직분을 선택하세요" />
+        <Field label="소속 (선택)" value={affiliation} onChangeText={setAffiliation} placeholder="예) OO목장 · OO부서" />
 
         {error ? (
           <ThemedText type="small" themeColor="danger">
