@@ -782,7 +782,7 @@ const styles = StyleSheet.create({
 
   // 큰 기도 타이머
   timerCard: { alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.four },
-  startImageBtn: { width: 220, height: 220, borderRadius: 110, alignSelf: 'center', overflow: 'hidden' },
+  startImageBtn: { width: 264, height: 264, borderRadius: 132, alignSelf: 'center', overflow: 'hidden' },
   startImage: { width: '100%', height: '100%' },
 
   // 전체 화면 기도 모드
