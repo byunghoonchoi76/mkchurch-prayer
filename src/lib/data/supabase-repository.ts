@@ -606,6 +606,20 @@ export const supabaseRepository: ChurchRepository = {
     if (error) throw new Error(error.message);
   },
 
+  async getChurchPrayerSeconds() {
+    const sb = requireSupabase();
+    // 서버 함수(SECURITY DEFINER)로 모든 성도의 개인·공동 기도시간을 합산합니다.
+    const { data, error } = await sb.rpc('church_prayer_total_seconds');
+    if (!error && (typeof data === 'number' || typeof data === 'string')) {
+      const n = Number(data);
+      if (Number.isFinite(n)) return n;
+    }
+    // 함수가 아직 없으면, 공개로 읽을 수 있는 공동 기도제목 누적만이라도 더해 돌려줍니다.
+    const res = await sb.from('communal_prayers').select('total_minutes');
+    if (res.error) return 0;
+    return ((res.data ?? []) as { total_minutes?: number }[]).reduce((s, r) => s + (r.total_minutes || 0), 0);
+  },
+
   async getMyReadingProgress() {
     const sb = requireSupabase();
     const { data } = await sb.from('reading_plan_progress').select('done_days').maybeSingle();

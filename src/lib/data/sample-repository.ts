@@ -71,6 +71,13 @@ interface SampleDb {
   groupMembers: SampleMember[];
 }
 
+/**
+ * 샘플 모드에서 '온 성도가 함께 드린 기도'의 기준값(초).
+ * 실제 서버(Supabase)에서는 모든 성도의 기도시간을 집계하지만, 계정이 없는 샘플에서는
+ * 교회 전체가 쌓아 온 시간을 대신해 이 값을 기준으로 보여 줍니다. (약 1,284시간)
+ */
+const CHURCH_BASELINE_SECONDS = 4_624_620;
+
 /** 샘플 모드의 '나'(로그인 대신) · 초대 검색에 쓰는 가상의 성도 명단 */
 const SAMPLE_ME: DirectoryUser = { id: 'sample-me', name: '나 (샘플)' };
 const SAMPLE_DIRECTORY: DirectoryUser[] = [
@@ -476,6 +483,15 @@ export const sampleRepository: ChurchRepository = {
     await ready();
     db.myPrayerTime = db.myPrayerTime.filter((e) => !(e.date === date && e.kind === kind));
     await persist();
+  },
+
+  async getChurchPrayerSeconds() {
+    await ready();
+    await delay(80);
+    // 샘플에서는 '온 성도'를 대신할 기준값 + 샘플 데이터의 누적을 더해 보여 줍니다.
+    const mine = db.myPrayerTime.reduce((s, e) => s + (e.minutes || 0), 0);
+    const communal = db.communalPrayers.reduce((s, c) => s + (c.totalMinutes || 0), 0);
+    return CHURCH_BASELINE_SECONDS + mine + communal;
   },
 
   // 샘플 모드는 계정이 없어 로컬(AsyncStorage)에만 저장하므로 여기선 사용되지 않습니다.

@@ -127,6 +127,22 @@ export default function MyPrayerScreen() {
   const active = useAllPrayerTime();
   const { goal } = useWeeklyGoal('personal');
 
+  // 온 성도가 함께 드린 기도시간(초). 서버에서는 모든 성도의 개인·공동 기도를 집계합니다.
+  const churchTotal = useAsyncData(() => repository.getChurchPrayerSeconds().catch(() => 0), []);
+
+  // 이 탭으로 돌아올 때마다 최신 합계로 갱신합니다. (값이 그대로면 애니메이션은 일어나지 않습니다)
+  useFocusEffect(
+    useCallback(() => {
+      churchTotal.reload();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []),
+  );
+
+  // 샘플 모드에서는 기준값이 '나'를 포함하지 않으므로, 내가 기도한 시간을 더해 함께 늘어나게 합니다.
+  // (서버 모드에서는 집계에 이미 내 시간이 포함되어 있어 더하지 않습니다.)
+  const mine = dataMode === 'supabase' ? 0 : active.totalMinutes;
+  const churchSeconds = (churchTotal.data ?? 0) + mine;
+
   return (
     <Screen scroll={false} contentStyle={styles.home}>
       {/* 상단 배너 — 등대의 빛(인도·소망) */}
@@ -137,7 +153,8 @@ export default function MyPrayerScreen() {
 
       {/* 큰 기도 타이머 — 남은 공간의 세로 중앙 */}
       <View style={styles.homeBody}>
-        <TimerCard active={active} goal={goal} />
+        <TimerCard active={active} goal={goal} onComplete={churchTotal.reload} />
+        <ChurchTotalBlock seconds={churchSeconds} ready={churchTotal.data != null} />
         <ThemedText type="caption" themeColor="textMuted" style={styles.homeNote}>
           기도제목과 기록은 아래 탭에서 볼 수 있어요.
         </ThemedText>
@@ -146,8 +163,73 @@ export default function MyPrayerScreen() {
   );
 }
 
+/**
+ * 온 성도가 함께 드린 기도 — 타이머 버튼 아래의 조용한 보조 블록.
+ * 한 개의 의미 있는 숫자를 크게, 화면에 들어올 때(또는 값이 바뀔 때) 부드럽게 카운트업합니다.
+ */
+function ChurchTotalBlock({ seconds, ready }: { seconds: number; ready: boolean }) {
+  const theme = useTheme();
+  const animated = useCountUp(ready ? seconds : 0);
+
+  return (
+    <View style={styles.churchTotal} accessibilityRole="summary">
+      <View style={styles.churchLabelRow}>
+        <Ionicons name="people" size={13} color={theme.textMuted} />
+        <ThemedText type="caption" themeColor="textMuted" fixed>
+          온 성도가 함께 드린 기도
+        </ThemedText>
+      </View>
+      <ThemedText fixed style={[styles.churchValue, { color: theme.primary }]}>
+        {ready ? formatChurchTotal(animated) : '—'}
+      </ThemedText>
+    </View>
+  );
+}
+
+/** 누적 초를 '1,284시간 27분'처럼 — 시간 단위에 천 단위 콤마. */
+function formatChurchTotal(seconds: number): string {
+  const s = Math.max(0, Math.round(seconds));
+  const totalMin = Math.floor(s / 60);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (h > 0) return m ? `${h.toLocaleString('ko-KR')}시간 ${m}분` : `${h.toLocaleString('ko-KR')}시간`;
+  if (totalMin > 0) return `${totalMin}분`;
+  return `${s}초`;
+}
+
+/** 목표값까지 부드럽게(easeOut) 카운트업. 이전 값에서 새 값으로 트윈하므로 값이 같으면 가만히 있습니다. */
+function useCountUp(target: number, duration = 900): number {
+  const [val, setVal] = useState(target);
+  const fromRef = useRef(0);
+
+  useEffect(() => {
+    const from = fromRef.current;
+    if (from === target) {
+      setVal(target);
+      return;
+    }
+    const start = Date.now();
+    let raf = 0;
+    const tick = () => {
+      const t = Math.min(1, (Date.now() - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3); // easeOutCubic
+      setVal(from + (target - from) * eased);
+      if (t < 1) {
+        raf = requestAnimationFrame(tick);
+      } else {
+        setVal(target);
+        fromRef.current = target;
+      }
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, duration]);
+
+  return val;
+}
+
 // ── 큰 기도 타이머 (맨 위) ───────────────────────────────────────
-function TimerCard({ active, goal }: { active: PrayerTime; goal: number }) {
+function TimerCard({ active, goal, onComplete }: { active: PrayerTime; goal: number; onComplete?: () => void }) {
   const { user } = useAuth();
   const bgm = usePrayerBgm();
   const [running, setRunning] = useState(false);
@@ -228,6 +310,7 @@ function TimerCard({ active, goal }: { active: PrayerTime; goal: number }) {
     if (secs > 0) {
       await active.addMinutes(secs);
       setResultSeconds(secs);
+      onComplete?.(); // 온 성도 누적 기도시간도 최신값으로 갱신
     }
   };
 
@@ -691,6 +774,11 @@ const styles = StyleSheet.create({
     textShadowRadius: 4,
   },
   homeNote: { textAlign: 'center', marginTop: Spacing.two },
+
+  // 온 성도가 함께 드린 기도 — 타이머 아래 보조 블록
+  churchTotal: { alignItems: 'center', gap: 2 },
+  churchLabelRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.one },
+  churchValue: { fontSize: 24, fontWeight: '800', letterSpacing: -0.3, fontVariant: ['tabular-nums'] },
 
   // 큰 기도 타이머
   timerCard: { alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.four },

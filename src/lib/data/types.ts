@@ -396,6 +396,9 @@ export interface ChurchRepository {
   addMyPrayerTime(kind: PrayerKind, date: string, minutes: number): Promise<void>;
   clearMyPrayerTime(kind: PrayerKind, date: string): Promise<void>;
 
+  /** 온 성도가 함께 드린 기도시간의 합계(초). 모든 성도의 개인·공동 기도시간을 서버에서 집계합니다. */
+  getChurchPrayerSeconds(): Promise<number>;
+
   /** 맥체인 성경읽기표 진도(완료한 날 인덱스 0~364) — 계정별 */
   getMyReadingProgress(): Promise<number[]>;
   setMyReadingProgress(days: number[]): Promise<void>;
