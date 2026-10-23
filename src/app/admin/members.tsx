@@ -41,10 +41,12 @@ export default function AdminMembersScreen() {
   }
 
   const list = (members.data ?? []).filter(matches);
+  // 네비게이션 제목: 교구는 '1교구 성도'처럼, 직분·연령대는 값만 ('성도 성도' 같은 중복 방지)
+  const navTitle = field === 'parish' ? `${value} 성도` : value;
 
   return (
     <Screen onRefresh={members.reload}>
-      <Stack.Screen options={{ title: `${value} 성도` }} />
+      <Stack.Screen options={{ title: navTitle }} />
 
       <View style={{ gap: Spacing.one }}>
         <SectionHeader title={`${FIELD_LABEL[field]} · ${value}`} />
