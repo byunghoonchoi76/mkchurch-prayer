@@ -138,10 +138,10 @@ export default function MyPrayerScreen() {
     }, []),
   );
 
-  // 샘플 모드에서는 기준값이 '나'를 포함하지 않으므로, 내가 기도한 시간을 더해 함께 늘어나게 합니다.
-  // (서버 모드에서는 집계에 이미 내 시간이 포함되어 있어 더하지 않습니다.)
-  const mine = dataMode === 'supabase' ? 0 : active.totalMinutes;
-  const churchSeconds = (churchTotal.data ?? 0) + mine;
+  // 서버 집계(= 나를 뺀 다른 성도들)에 내 기도시간을 클라이언트에서 더해 보여 줍니다.
+  // 내 저장분(active.totalMinutes)은 기도를 마치면 바로 늘어나므로, 서버 설치 여부와 상관없이
+  // '기도 마침'이 즉시 반영됩니다. 기도 중 실시간 증가는 기도 모드 안에서 보여 줍니다(아래 TimerCard).
+  const churchSeconds = (churchTotal.data ?? 0) + active.totalMinutes;
 
   return (
     <Screen scroll={false} contentStyle={styles.home}>
@@ -153,9 +153,9 @@ export default function MyPrayerScreen() {
 
       {/* 큰 기도 타이머 — 남은 공간의 세로 중앙 */}
       <View style={styles.homeBody}>
-        <TimerCard active={active} goal={goal} onComplete={churchTotal.reload} />
+        <TimerCard active={active} goal={goal} churchBaseSeconds={churchSeconds} onComplete={churchTotal.reload} />
         <ChurchTotalBlock seconds={churchSeconds} ready={churchTotal.data != null} />
-        <ThemedText type="caption" themeColor="textMuted" style={styles.homeNote}>
+        <ThemedText type="small" themeColor="textMuted" style={styles.homeNote}>
           기도제목과 기록은 아래 탭에서 볼 수 있어요.
         </ThemedText>
       </View>
@@ -174,8 +174,8 @@ function ChurchTotalBlock({ seconds, ready }: { seconds: number; ready: boolean 
   return (
     <View style={styles.churchTotal} accessibilityRole="summary">
       <View style={styles.churchLabelRow}>
-        <Ionicons name="people" size={13} color={theme.textMuted} />
-        <ThemedText type="caption" themeColor="textMuted" fixed>
+        <Ionicons name="people" size={15} color={theme.textMuted} />
+        <ThemedText type="small" themeColor="textMuted" fixed>
           온 성도가 함께 드린 기도
         </ThemedText>
       </View>
@@ -186,7 +186,7 @@ function ChurchTotalBlock({ seconds, ready }: { seconds: number; ready: boolean 
   );
 }
 
-/** 누적 초를 '1,284시간 27분'처럼 — 시간 단위에 천 단위 콤마. */
+/** 누적 초를 '1,284시간 27분'처럼 — 시간 단위에 천 단위 콤마. (홈 화면용, 깔끔하게) */
 function formatChurchTotal(seconds: number): string {
   const s = Math.max(0, Math.round(seconds));
   const totalMin = Math.floor(s / 60);
@@ -195,6 +195,18 @@ function formatChurchTotal(seconds: number): string {
   if (h > 0) return m ? `${h.toLocaleString('ko-KR')}시간 ${m}분` : `${h.toLocaleString('ko-KR')}시간`;
   if (totalMin > 0) return `${totalMin}분`;
   return `${s}초`;
+}
+
+/** 초까지 넣은 정밀 표기 — 기도 모드 안에서 '실시간으로 올라가는' 모습이 보이도록 매초 바뀝니다. */
+function formatChurchTotalPrecise(seconds: number): string {
+  const s = Math.max(0, Math.round(seconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const ss = String(sec).padStart(2, '0');
+  if (h > 0) return `${h.toLocaleString('ko-KR')}시간 ${m}분 ${ss}초`;
+  if (m > 0) return `${m}분 ${ss}초`;
+  return `${sec}초`;
 }
 
 /** 목표값까지 부드럽게(easeOut) 카운트업. 이전 값에서 새 값으로 트윈하므로 값이 같으면 가만히 있습니다. */
@@ -229,7 +241,17 @@ function useCountUp(target: number, duration = 900): number {
 }
 
 // ── 큰 기도 타이머 (맨 위) ───────────────────────────────────────
-function TimerCard({ active, goal, onComplete }: { active: PrayerTime; goal: number; onComplete?: () => void }) {
+function TimerCard({
+  active,
+  goal,
+  churchBaseSeconds,
+  onComplete,
+}: {
+  active: PrayerTime;
+  goal: number;
+  churchBaseSeconds?: number;
+  onComplete?: () => void;
+}) {
   const { user } = useAuth();
   const bgm = usePrayerBgm();
   const [running, setRunning] = useState(false);
@@ -350,6 +372,7 @@ function TimerCard({ active, goal, onComplete }: { active: PrayerTime; goal: num
         paused={paused}
         onPauseToggle={paused ? resume : pause}
         todaySeconds={active.todayMinutes}
+        churchBaseSeconds={churchBaseSeconds}
         byKind={topics.data ?? EMPTY_BY_KIND}
         selection={selection}
         onChangeSelection={setSelection}
@@ -372,6 +395,7 @@ function PrayerFocusModal({
   paused,
   onPauseToggle,
   todaySeconds,
+  churchBaseSeconds,
   byKind,
   selection,
   onChangeSelection,
@@ -386,6 +410,7 @@ function PrayerFocusModal({
   paused: boolean;
   onPauseToggle: () => void;
   todaySeconds: number;
+  churchBaseSeconds?: number;
   byKind: TopicsByKind;
   selection: TodaySelection;
   onChangeSelection: (sel: TodaySelection) => void;
@@ -434,6 +459,17 @@ function PrayerFocusModal({
           },
         ]}>
         <PrayerDial seconds={elapsedSeconds} display={display} paused={paused} />
+        {churchBaseSeconds != null ? (
+          <View style={styles.focusChurch}>
+            <Ionicons name="people" size={13} color={theme.textMuted} />
+            <ThemedText type="caption" themeColor="textMuted" fixed>
+              온 성도가 함께{'  '}
+              <ThemedText type="smallBold" themeColor="primary" fixed style={styles.tabular}>
+                {formatChurchTotalPrecise(churchBaseSeconds + elapsedSeconds)}
+              </ThemedText>
+            </ThemedText>
+          </View>
+        ) : null}
         <View style={styles.dialMetaRow}>
           <ThemedText type="caption" themeColor="textMuted" fixed>
             오늘 누적 {durationLabel(todaySeconds)}
@@ -776,9 +812,12 @@ const styles = StyleSheet.create({
   homeNote: { textAlign: 'center', marginTop: Spacing.two },
 
   // 온 성도가 함께 드린 기도 — 타이머 아래 보조 블록
-  churchTotal: { alignItems: 'center', gap: 2 },
+  churchTotal: { alignItems: 'center', gap: 3 },
   churchLabelRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.one },
-  churchValue: { fontSize: 24, fontWeight: '800', letterSpacing: -0.3, fontVariant: ['tabular-nums'] },
+  churchValue: { fontSize: 27, fontWeight: '800', letterSpacing: -0.3, fontVariant: ['tabular-nums'] },
+  // 기도 모드 안 — 실시간으로 올라가는 온 성도 누적
+  focusChurch: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.one, marginTop: Spacing.one },
+  tabular: { fontVariant: ['tabular-nums'] },
 
   // 큰 기도 타이머
   timerCard: { alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.four },
