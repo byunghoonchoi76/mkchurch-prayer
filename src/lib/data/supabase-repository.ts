@@ -810,17 +810,26 @@ export const supabaseRepository: ChurchRepository = {
     const sb = requireSupabase();
     const res = await sb
       .from('profiles')
-      .select('id, name, role, parish, position, created_at')
+      .select('id, name, role, parish, position, birth_date, created_at')
       .order('created_at', { ascending: false });
     if (res.error) throw new Error(res.error.message);
     return (
-      (res.data ?? []) as { id: string; name: string; role: string; parish: string | null; position: string | null; created_at: string }[]
+      (res.data ?? []) as {
+        id: string;
+        name: string;
+        role: string;
+        parish: string | null;
+        position: string | null;
+        birth_date: string | null;
+        created_at: string;
+      }[]
     ).map((r) => ({
       id: r.id,
       name: r.name,
       role: (r.role === 'admin' ? 'admin' : 'member') as 'admin' | 'member',
       parish: r.parish ?? undefined,
       position: r.position ?? undefined,
+      birthDate: r.birth_date ?? undefined,
       createdAt: r.created_at,
     }));
   },

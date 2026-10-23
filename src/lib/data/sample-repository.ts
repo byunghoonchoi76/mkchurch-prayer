@@ -91,15 +91,17 @@ const SAMPLE_DIRECTORY: DirectoryUser[] = [
 ];
 
 // 샘플 모드 가입자 명단 (삭제 데모용으로 수정 가능)
-// 샘플 성도의 교구·직분(교구별 통계 데모용)
+// 샘플 성도의 교구·직분·생년월일(통계 데모용)
 const SAMPLE_PARISH = ['1교구', '2교구', '1교구', '3교구', '청년', '2교구', '미정'];
 const SAMPLE_POSITION = ['목사', '집사', '권사', '성도', '성도', '장로', '성도'];
+const SAMPLE_BIRTH = ['1968-05-10', '1985-11-02', '1977-03-21', '1992-07-15', '2001-09-30', '1959-01-08', '1988-12-24'];
 let sampleMembers: AppMember[] = SAMPLE_DIRECTORY.map((u, i) => ({
   id: u.id,
   name: u.name,
   role: i === 0 ? 'admin' : 'member',
   parish: SAMPLE_PARISH[i % SAMPLE_PARISH.length],
   position: SAMPLE_POSITION[i % SAMPLE_POSITION.length],
+  birthDate: SAMPLE_BIRTH[i % SAMPLE_BIRTH.length],
   createdAt: new Date(Date.now() - i * 3 * 86400000).toISOString(),
 }));
 

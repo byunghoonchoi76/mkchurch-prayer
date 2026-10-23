@@ -1,18 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
-import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
+import { MemberListDivider, MemberRow } from '@/components/member-row';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
-import { Badge, Button, Card, EmptyState, ErrorState, ListRow, LoadingState, SectionHeader } from '@/components/ui';
+import { Card, EmptyState, ErrorState, ListRow, LoadingState, SectionHeader } from '@/components/ui';
 import { PARISH_OPTIONS, POSITION_OPTIONS } from '@/constants/church-roles';
-import { Radius, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth';
 import { repository, useAsyncData } from '@/lib/data';
 import type { AppMember } from '@/lib/data/types';
-import { formatDate } from '@/lib/format';
+import { AGE_GROUP_ORDER, ageGroupOf } from '@/lib/member-stats';
 
 /**
  * 관리자 대시보드 — 교회 관리자가 성도·공동 기도제목을 한곳에서 관리합니다.
@@ -64,7 +64,12 @@ export default function AdminDashboardScreen() {
             <EmptyState icon="pie-chart-outline" message="집계할 성도가 없습니다." />
           </Card>
         ) : (
-          <DistributionStats members={data.members} pick={(m) => m.parish} order={PARISH_OPTIONS} />
+          <DistributionStats
+            members={data.members}
+            pick={(m) => m.parish}
+            order={PARISH_OPTIONS}
+            onSelect={(value) => router.push({ pathname: '/admin/members', params: { field: 'parish', value } })}
+          />
         )}
       </View>
 
@@ -78,7 +83,31 @@ export default function AdminDashboardScreen() {
             <EmptyState icon="pie-chart-outline" message="집계할 성도가 없습니다." />
           </Card>
         ) : (
-          <DistributionStats members={data.members} pick={(m) => m.position} order={POSITION_OPTIONS} />
+          <DistributionStats
+            members={data.members}
+            pick={(m) => m.position}
+            order={POSITION_OPTIONS}
+            onSelect={(value) => router.push({ pathname: '/admin/members', params: { field: 'position', value } })}
+          />
+        )}
+      </View>
+
+      {/* 연령대별 성도 통계 */}
+      <View>
+        <SectionHeader title="연령대별 성도 통계" />
+        {summary.loading && !data ? (
+          <LoadingState />
+        ) : !data || data.members.length === 0 ? (
+          <Card>
+            <EmptyState icon="pie-chart-outline" message="집계할 성도가 없습니다." />
+          </Card>
+        ) : (
+          <DistributionStats
+            members={data.members}
+            pick={(m) => ageGroupOf(m.birthDate)}
+            order={AGE_GROUP_ORDER}
+            onSelect={(value) => router.push({ pathname: '/admin/members', params: { field: 'age', value } })}
+          />
         )}
       </View>
 
@@ -118,7 +147,7 @@ export default function AdminDashboardScreen() {
           <Card>
             {data.members.map((m, i) => (
               <View key={m.id}>
-                {i > 0 ? <Divider /> : null}
+                {i > 0 ? <MemberListDivider /> : null}
                 <MemberRow member={m} isMe={m.id === user?.id} onDeleted={summary.reload} />
               </View>
             ))}
@@ -157,10 +186,13 @@ function DistributionStats({
   members,
   pick,
   order,
+  onSelect,
 }: {
   members: AppMember[];
   pick: (m: AppMember) => string | undefined;
   order: readonly string[];
+  /** 주어지면 각 행을 누를 수 있고, 누르면 그 분류 값을 넘겨 줍니다. */
+  onSelect?: (label: string) => void;
 }) {
   const theme = useTheme();
 
@@ -187,8 +219,17 @@ function DistributionStats({
         const n = counts.get(label) ?? 0;
         const pct = total > 0 ? Math.round((n / total) * 100) : 0;
         const muted = label === '미지정' || label === '미정';
+        const tappable = !!onSelect;
         return (
-          <View key={label} style={[styles.parishRow, i > 0 && styles.parishRowGap]}>
+          <Pressable
+            key={label}
+            onPress={tappable ? () => onSelect(label) : undefined}
+            disabled={!tappable}
+            style={({ pressed }) => [
+              styles.parishRow,
+              i > 0 && styles.parishRowGap,
+              tappable && pressed && { opacity: 0.6 },
+            ]}>
             <ThemedText type="small" style={styles.parishLabel} numberOfLines={1}>
               {label}
             </ThemedText>
@@ -206,87 +247,12 @@ function DistributionStats({
             <ThemedText type="caption" themeColor="textMuted" style={styles.parishPct} fixed>
               {pct}%
             </ThemedText>
-          </View>
+            {tappable ? <Ionicons name="chevron-forward" size={14} color={theme.textMuted} /> : null}
+          </Pressable>
         );
       })}
     </Card>
   );
-}
-
-/** 성도 한 명 행 — 이름 · 역할 · 가입일 + 삭제. */
-function MemberRow({ member, isMe, onDeleted }: { member: AppMember; isMe: boolean; onDeleted: () => void }) {
-  const theme = useTheme();
-  const [confirm, setConfirm] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | undefined>();
-
-  const remove = async () => {
-    setBusy(true);
-    setError(undefined);
-    try {
-      await repository.deleteMember(member.id);
-      setConfirm(false);
-      onDeleted();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '삭제하지 못했습니다.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <View style={styles.memberRow}>
-      <View style={styles.memberInfo}>
-        <View style={styles.memberNameRow}>
-          <ThemedText type="smallBold" numberOfLines={1} style={styles.flexShrink}>
-            {member.name}
-          </ThemedText>
-          {member.role === 'admin' ? <Badge label="관리자" tone="accent" /> : null}
-          {isMe ? <Badge label="나" tone="textSecondary" /> : null}
-        </View>
-        <ThemedText type="caption" themeColor="textMuted">
-          {formatDate(member.createdAt)} 가입
-        </ThemedText>
-      </View>
-
-      {isMe ? (
-        <ThemedText type="caption" themeColor="textMuted" fixed style={styles.selfHint}>
-          본인
-        </ThemedText>
-      ) : (
-        <Pressable onPress={() => setConfirm(true)} hitSlop={8} style={styles.delBtn}>
-          <Ionicons name="trash-outline" size={18} color={theme.danger} />
-        </Pressable>
-      )}
-
-      <Modal visible={confirm} transparent animationType="fade" onRequestClose={() => setConfirm(false)}>
-        <Pressable style={styles.backdrop} onPress={() => (busy ? null : setConfirm(false))}>
-          <Pressable style={[styles.sheet, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => {}}>
-            <ThemedText type="smallBold" style={styles.center}>
-              {member.name} 님을 삭제할까요?
-            </ThemedText>
-            <ThemedText type="caption" themeColor="textMuted" style={[styles.center, styles.mt4]}>
-              이 성도의 계정이 삭제됩니다. 되돌릴 수 없습니다.
-            </ThemedText>
-            {error ? (
-              <ThemedText type="caption" themeColor="danger" style={[styles.center, styles.mt4]}>
-                {error}
-              </ThemedText>
-            ) : null}
-            <View style={styles.btnRow}>
-              <Button label="취소" variant="ghost" style={styles.flex} onPress={() => setConfirm(false)} />
-              <Button label="삭제" variant="danger" style={styles.flex} loading={busy} onPress={() => void remove()} />
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
-    </View>
-  );
-}
-
-function Divider() {
-  const theme = useTheme();
-  return <View style={[styles.divider, { backgroundColor: theme.border }]} />;
 }
 
 const styles = StyleSheet.create({
@@ -310,15 +276,4 @@ const styles = StyleSheet.create({
   parishPct: { width: 36, textAlign: 'right' },
 
   rightRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
-
-  memberRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, paddingVertical: Spacing.two },
-  memberInfo: { flex: 1, gap: 2 },
-  memberNameRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, flexWrap: 'wrap' },
-  selfHint: { paddingHorizontal: Spacing.two },
-  delBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
-  divider: { height: StyleSheet.hairlineWidth },
-
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center', padding: Spacing.five },
-  sheet: { width: '86%', maxWidth: 340, borderRadius: Radius.large, borderWidth: StyleSheet.hairlineWidth, padding: Spacing.four },
-  btnRow: { flexDirection: 'row', gap: Spacing.two, marginTop: Spacing.four },
 });

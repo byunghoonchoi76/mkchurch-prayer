@@ -290,6 +290,8 @@ export interface AppMember {
   parish?: string;
   /** 직분 (선택) */
   position?: string;
+  /** 생년월일 (선택) — 'YYYY-MM-DD' 또는 자유 입력. 연령대 통계에 사용 */
+  birthDate?: string;
   /** 가입일 (ISO) */
   createdAt: string;
 }

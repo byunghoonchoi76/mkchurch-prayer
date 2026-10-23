@@ -109,6 +109,7 @@ function RootNavigator() {
       <Stack.Screen name="terms" options={{ title: '이용약관' }} />
       <Stack.Screen name="sign-in" options={{ title: '로그인', presentation: 'modal' }} />
       <Stack.Screen name="admin/index" options={{ title: '관리자 대시보드' }} />
+      <Stack.Screen name="admin/members" options={{ title: '성도 명단' }} />
       <Stack.Screen name="admin/communal/[id]" options={{ title: '공동 기도제목' }} />
     </Stack>
   );
