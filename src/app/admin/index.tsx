@@ -1,13 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { MemberListDivider, MemberRow } from '@/components/member-row';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { Card, EmptyState, ErrorState, ListRow, LoadingState, SectionHeader } from '@/components/ui';
 import { PARISH_OPTIONS, POSITION_OPTIONS } from '@/constants/church-roles';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth';
 import { repository, useAsyncData } from '@/lib/data';
@@ -22,6 +23,7 @@ export default function AdminDashboardScreen() {
   const router = useRouter();
   const theme = useTheme();
   const { user, isAdmin } = useAuth();
+  const [query, setQuery] = useState('');
 
   // 요약 수치 + 성도 명단을 함께 불러옵니다.
   const summary = useAsyncData(async () => {
@@ -144,14 +146,7 @@ export default function AdminDashboardScreen() {
         ) : !data || data.members.length === 0 ? (
           <EmptyState icon="person-outline" message="아직 가입한 성도가 없습니다." />
         ) : (
-          <Card>
-            {data.members.map((m, i) => (
-              <View key={m.id}>
-                {i > 0 ? <MemberListDivider /> : null}
-                <MemberRow member={m} isMe={m.id === user?.id} onDeleted={summary.reload} />
-              </View>
-            ))}
-          </Card>
+          <MemberManager members={data.members} meId={user?.id} query={query} onQuery={setQuery} onChanged={summary.reload} />
         )}
       </View>
 
@@ -159,6 +154,68 @@ export default function AdminDashboardScreen() {
         성도 계정을 삭제하면 되돌릴 수 없습니다. 삭제 전에 한 번 더 확인해 주세요.
       </ThemedText>
     </Screen>
+  );
+}
+
+/** 성도 관리 — 이름·교구·직분으로 검색하고, 명단에서 삭제합니다. */
+function MemberManager({
+  members,
+  meId,
+  query,
+  onQuery,
+  onChanged,
+}: {
+  members: AppMember[];
+  meId?: string;
+  query: string;
+  onQuery: (q: string) => void;
+  onChanged: () => void;
+}) {
+  const theme = useTheme();
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? members.filter((m) => [m.name, m.parish, m.position].some((v) => (v ?? '').toLowerCase().includes(q)))
+    : members;
+
+  return (
+    <View style={styles.managerGap}>
+      <View style={[styles.search, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+        <Ionicons name="search" size={18} color={theme.textMuted} />
+        <TextInput
+          value={query}
+          onChangeText={onQuery}
+          placeholder="이름·교구·직분으로 검색"
+          placeholderTextColor={theme.textMuted}
+          style={[styles.searchInput, { color: theme.text }]}
+          autoCapitalize="none"
+          returnKeyType="search"
+        />
+        {query ? (
+          <Pressable onPress={() => onQuery('')} hitSlop={8}>
+            <Ionicons name="close-circle" size={18} color={theme.textMuted} />
+          </Pressable>
+        ) : null}
+      </View>
+
+      {q ? (
+        <ThemedText type="caption" themeColor="textMuted">
+          검색 결과 {filtered.length}명
+        </ThemedText>
+      ) : null}
+
+      {filtered.length === 0 ? (
+        <EmptyState icon="search-outline" message={`'${query.trim()}'에 해당하는 성도가 없습니다.`} />
+      ) : (
+        <Card>
+          {filtered.map((m, i) => (
+            <View key={m.id}>
+              {i > 0 ? <MemberListDivider /> : null}
+              <MemberRow member={m} isMe={m.id === meId} onDeleted={onChanged} />
+            </View>
+          ))}
+        </Card>
+      )}
+    </View>
   );
 }
 
@@ -276,4 +333,17 @@ const styles = StyleSheet.create({
   parishPct: { width: 36, textAlign: 'right' },
 
   rightRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+
+  // 성도 검색
+  managerGap: { gap: Spacing.two },
+  search: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.medium,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+  },
+  searchInput: { flex: 1, fontSize: 16, paddingVertical: 2 },
 });
