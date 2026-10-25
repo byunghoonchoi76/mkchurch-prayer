@@ -1,0 +1,28 @@
+name: CI
+
+# PR 마다 타입체크와 린트를 실행합니다.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    name: typecheck & lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npx eslint .
