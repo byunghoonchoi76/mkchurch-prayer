@@ -106,7 +106,7 @@ security definer
 set search_path = public
 as $$
   update public.communal_prayers
-  set total_minutes = total_minutes + greatest(0, p_minutes)
+  set total_minutes = total_minutes + least(greatest(0, p_minutes), 1440)
   where id = p_id
   returning *;
 $$;
@@ -211,15 +211,14 @@ begin
   end if;
 end $$;
 alter table public.push_subscriptions enable row level security;
--- 구독은 불투명한 endpoint 로만 접근하므로 공개 정책으로 둡니다(교회 앱 특성).
+-- 구독은 자신의 불투명한 endpoint 를 제시해야만 다루는 RPC 로만 접근합니다.
+-- (예전의 공개 정책 using(true) 는 누구나 전체 구독을 조회·삭제할 수 있어 제거)
+-- RPC 정의와 권한은 migrate-security-fixes.sql 또는 schema.sql 을 함께 실행하세요.
 drop policy if exists "구독 조회" on public.push_subscriptions;
-create policy "구독 조회" on public.push_subscriptions for select using (true);
 drop policy if exists "구독 저장" on public.push_subscriptions;
-create policy "구독 저장" on public.push_subscriptions for insert with check (true);
 drop policy if exists "구독 수정" on public.push_subscriptions;
-create policy "구독 수정" on public.push_subscriptions for update using (true);
 drop policy if exists "구독 삭제" on public.push_subscriptions;
-create policy "구독 삭제" on public.push_subscriptions for delete using (true);
+revoke all on public.push_subscriptions from anon, authenticated;
 
 -- 9) 소통방(비공개 소그룹) — 초대된 멤버만 입장·대화, 리더가 초대, 개인별 알림
 -- ─────────────────────────────────────────────

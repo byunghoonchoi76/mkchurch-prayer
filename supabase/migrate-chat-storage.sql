@@ -6,16 +6,21 @@
 -- 안전장치: 메시지 사진 컬럼이 없으면 추가(이미 있으면 무시)
 alter table public.group_messages add column if not exists image_url text;
 
--- 소통방 사진(경로가 chat/ 로 시작)은 로그인한 사용자 누구나 업로드 가능
+-- 소통방 사진 업로드 — 경로 chat/<group_id>/... 의 '그 방 멤버'만 올릴 수 있습니다.
 drop policy if exists "소통방 사진 업로드" on storage.objects;
 create policy "소통방 사진 업로드" on storage.objects
   for insert to authenticated
-  with check (bucket_id = 'bulletins' and name like 'chat/%');
+  with check (
+    bucket_id = 'bulletins'
+    and name like 'chat/%'
+    and (storage.foldername(name))[2] ~ '^[0-9a-fA-F-]{36}$'
+    and public.is_group_member(((storage.foldername(name))[2])::uuid)
+  );
 
--- 메시지를 지우면 올린 본인의 소통방 사진도 저장소에서 함께 삭제되도록 허용
+-- 메시지를 지우면 올린 본인(또는 관리자)의 소통방 사진도 저장소에서 함께 삭제되도록 허용
 drop policy if exists "소통방 사진 삭제(본인)" on storage.objects;
 create policy "소통방 사진 삭제(본인)" on storage.objects
   for delete to authenticated
-  using (bucket_id = 'bulletins' and name like 'chat/%' and owner = auth.uid());
+  using (bucket_id = 'bulletins' and name like 'chat/%' and (owner = auth.uid() or public.is_admin()));
 
 -- 조회(공개 읽기)는 기존 '주보 이미지 공개 조회' 정책이 bulletins 버킷 전체를 이미 허용하므로 추가 설정이 필요 없습니다.
