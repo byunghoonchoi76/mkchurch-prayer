@@ -54,7 +54,18 @@ Deno.serve(async (req) => {
     .eq('id', messageId)
     .maybeSingle();
   if (!msg) return json({ ok: false, error: 'message not found' }, 404);
-  if (msg.author_id && msg.author_id !== caller.id) return json({ ok: false, error: 'forbidden' }, 403);
+  // 작성자 본인만 자기 글 알림을 보낼 수 있습니다.
+  // (author_id 가 비어 있으면 본인 확인이 불가하므로 거부 — 예전의 null 우회 차단)
+  if (msg.author_id !== caller.id) return json({ ok: false, error: 'forbidden' }, 403);
+
+  // 방어적 확인: 호출자가 그 방의 멤버인지도 검사합니다.
+  const { data: membership } = await service
+    .from('group_members')
+    .select('user_id')
+    .eq('group_id', msg.group_id)
+    .eq('user_id', caller.id)
+    .maybeSingle();
+  if (!membership) return json({ ok: false, error: 'forbidden' }, 403);
 
   const { data: group } = await service.from('small_groups').select('name').eq('id', msg.group_id).maybeSingle();
   const groupName = group?.name ?? '소통방';

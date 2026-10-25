@@ -10,14 +10,16 @@ const TOPICS_ICON = require('@/assets/images/tab-topics.png');
 
 /** 한글 받침까지 온전히 보이도록 탭 라벨을 직접 그립니다. */
 function tabLabel(label: string) {
-  return ({ color }: { color: ColorValue }) => <Text style={[styles.tabLabel, { color }]}>{label}</Text>;
+  const TabLabel = ({ color }: { color: ColorValue }) => <Text style={[styles.tabLabel, { color }]}>{label}</Text>;
+  return TabLabel;
 }
 
 /** 이미지 탭 아이콘 — 활성/비활성 색(tintColor)으로 칠해집니다. */
 function imageIcon(src: number) {
-  return ({ color, size }: { color: ColorValue; size: number }) => (
+  const ImageIcon = ({ color, size }: { color: ColorValue; size: number }) => (
     <Image source={src} style={{ width: size, height: size }} contentFit="contain" tintColor={color as string} />
   );
+  return ImageIcon;
 }
 
 export default function TabsLayout() {

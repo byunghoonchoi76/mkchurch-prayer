@@ -130,9 +130,9 @@ export function uploadAnnouncementImage(image: PickedImage): Promise<string> {
   return uploadImage(image, 'announcements');
 }
 
-/** 소통방 사진 업로드 */
-export function uploadChatImage(image: PickedImage): Promise<string> {
-  return uploadImage(image, 'chat');
+/** 소통방 사진 업로드 — 경로에 그룹 id 를 넣어 '그 방 멤버만' 올릴 수 있게 합니다. */
+export function uploadChatImage(image: PickedImage, groupId: string): Promise<string> {
+  return uploadImage(image, `chat/${groupId}`);
 }
 
 /** 우리 저장소(bulletins 버킷)의 파일이면 지웁니다. 다른 주소는 건드리지 않습니다. (실패해도 무시) */

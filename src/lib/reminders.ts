@@ -26,6 +26,14 @@ export interface ReminderItem {
   minute: number;
 }
 
+/** push_get_slots RPC 가 돌려주는 한 행(암호키는 제외). */
+interface PushSlotRow {
+  slot: number;
+  days: number[];
+  time_hhmm: string;
+  enabled: boolean;
+}
+
 export interface ReminderState {
   supported: boolean;
   reason?: string;
@@ -99,26 +107,21 @@ export async function ensurePushSubscription(userId: string | null): Promise<{ o
         applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY) as BufferSource,
       }));
     const json = sub.toJSON();
-    const { data } = await supabase.from('push_subscriptions').select('slot').eq('endpoint', sub.endpoint).limit(1);
+    const { data } = await supabase.rpc('push_get_slots', { p_endpoint: sub.endpoint });
     if (!data || data.length === 0) {
-      await supabase.from('push_subscriptions').upsert(
-        {
-          endpoint: sub.endpoint,
-          slot: 0,
-          p256dh: json.keys?.p256dh,
-          auth: json.keys?.auth,
-          user_id: userId,
-          days: [],
-          time_hhmm: '21:00',
-          tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          enabled: false, // 리마인더는 끈 상태 — 소통방 등 대상 알림에만 사용
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'endpoint,slot' },
-      );
+      await supabase.rpc('push_upsert', {
+        p_endpoint: sub.endpoint,
+        p_slot: 0,
+        p_p256dh: json.keys?.p256dh,
+        p_auth: json.keys?.auth,
+        p_days: [],
+        p_time_hhmm: '21:00',
+        p_tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        p_enabled: false, // 리마인더는 끈 상태 — 소통방 등 대상 알림에만 사용
+      });
     } else if (userId) {
-      // 로그아웃 상태에서 만든 구독이면 user_id 를 채워 둡니다.
-      await supabase.from('push_subscriptions').update({ user_id: userId }).eq('endpoint', sub.endpoint).is('user_id', null);
+      // 로그아웃 상태에서 만든 구독이면 로그인한 본인 user_id 를 채워 둡니다.
+      await supabase.rpc('push_claim', { p_endpoint: sub.endpoint });
     }
     return { ok: true };
   } catch (e) {
@@ -166,13 +169,10 @@ export function useReminders() {
         const reg = await navigator.serviceWorker.getRegistration(`${basePath()}/`);
         const sub = reg ? await reg.pushManager.getSubscription() : null;
         if (sub) {
-          const { data } = await supabase
-            .from('push_subscriptions')
-            .select('slot, days, time_hhmm, enabled')
-            .eq('endpoint', sub.endpoint)
-            .order('slot', { ascending: true });
-          if (data && data.length > 0) {
-            const items: ReminderItem[] = data.slice(0, MAX_REMINDERS).map((row, i) => {
+          const { data } = await supabase.rpc('push_get_slots', { p_endpoint: sub.endpoint });
+          const rows = (data ?? []) as PushSlotRow[];
+          if (rows.length > 0) {
+            const items: ReminderItem[] = rows.slice(0, MAX_REMINDERS).map((row, i) => {
               const [h, m] = String(row.time_hhmm ?? '21:00').split(':').map((x) => parseInt(x, 10));
               return {
                 slot: typeof row.slot === 'number' ? row.slot : i,
@@ -181,7 +181,7 @@ export function useReminders() {
                 minute: Number.isFinite(m) ? m : 0,
               };
             });
-            loaded = { items, enabled: data.some((row) => row.enabled) };
+            loaded = { items, enabled: rows.some((row) => row.enabled) };
           }
         }
       } catch {
@@ -212,7 +212,7 @@ export function useReminders() {
       const reg = await navigator.serviceWorker.getRegistration(`${basePath()}/`);
       const sub = reg ? await reg.pushManager.getSubscription() : null;
       if (sub) {
-        await supabase.from('push_subscriptions').delete().eq('endpoint', sub.endpoint).eq('slot', slot);
+        await supabase.rpc('push_delete_slot', { p_endpoint: sub.endpoint, p_slot: slot });
       }
     } catch {
       /* 다음 저장에서 정리됩니다. */
@@ -251,32 +251,27 @@ export function useReminders() {
         }));
       const json = sub.toJSON();
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      const now = new Date().toISOString();
 
       const items = state.items;
-      const rows = items.map((it) => ({
-        endpoint: sub.endpoint,
-        slot: it.slot,
-        p256dh: json.keys?.p256dh,
-        auth: json.keys?.auth,
-        user_id: user?.id ?? null,
-        days: it.days,
-        time_hhmm: `${pad2(it.hour)}:${pad2(it.minute)}`,
-        tz,
-        enabled: true,
-        updated_at: now,
-      }));
-      const { error: upErr } = await supabase.from('push_subscriptions').upsert(rows, { onConflict: 'endpoint,slot' });
-      if (upErr) throw new Error(upErr.message);
+      // user_id 는 서버(RPC)에서 로그인한 본인으로 자동 설정됩니다.
+      for (const it of items) {
+        const { error: upErr } = await supabase.rpc('push_upsert', {
+          p_endpoint: sub.endpoint,
+          p_slot: it.slot,
+          p_p256dh: json.keys?.p256dh,
+          p_auth: json.keys?.auth,
+          p_days: it.days,
+          p_time_hhmm: `${pad2(it.hour)}:${pad2(it.minute)}`,
+          p_tz: tz,
+          p_enabled: true,
+        });
+        if (upErr) throw new Error(upErr.message);
+      }
 
       // 화면에서 지운 slot 이 서버에 남아 있으면 제거합니다.
       const keepSlots = items.map((it) => it.slot);
       if (keepSlots.length > 0) {
-        await supabase
-          .from('push_subscriptions')
-          .delete()
-          .eq('endpoint', sub.endpoint)
-          .not('slot', 'in', `(${keepSlots.join(',')})`);
+        await supabase.rpc('push_delete_others', { p_endpoint: sub.endpoint, p_keep: keepSlots });
       }
 
       setState((s) => ({ ...s, permission, enabled: true }));
@@ -327,7 +322,7 @@ export function useReminders() {
       const reg = await navigator.serviceWorker.getRegistration(`${basePath()}/`);
       const sub = reg ? await reg.pushManager.getSubscription() : null;
       if (sub) {
-        await supabase.from('push_subscriptions').update({ enabled: false }).eq('endpoint', sub.endpoint);
+        await supabase.rpc('push_disable', { p_endpoint: sub.endpoint });
       }
       setState((s) => ({ ...s, enabled: false }));
     } catch (e) {

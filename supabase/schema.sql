@@ -199,7 +199,7 @@ security definer
 set search_path = public
 as $$
   update public.communal_prayers
-  set total_minutes = total_minutes + greatest(0, p_minutes)
+  set total_minutes = total_minutes + least(greatest(0, p_minutes), 1440)
   where id = p_id
   returning *;
 $$;
@@ -423,7 +423,7 @@ create policy "본인 프로필 조회" on public.profiles
 
 drop policy if exists "본인 프로필 생성" on public.profiles;
 create policy "본인 프로필 생성" on public.profiles
-  for insert with check (auth.uid() = id);
+  for insert with check (auth.uid() = id and role = 'member');
 
 drop policy if exists "본인 프로필 수정" on public.profiles;
 create policy "본인 프로필 수정" on public.profiles
@@ -553,12 +553,76 @@ create table if not exists public.push_subscriptions (
   primary key (endpoint, slot)
 );
 alter table public.push_subscriptions enable row level security;
--- 구독은 불투명한 endpoint 로만 접근하므로 공개 정책으로 둡니다(교회 앱 특성).
+-- 구독은 자신의 불투명한 endpoint 를 제시해야만 다루는 RPC 로만 접근합니다.
+-- (예전의 공개 정책 using(true) 는 누구나 전체 구독을 조회·삭제할 수 있어 제거)
 drop policy if exists "구독 조회" on public.push_subscriptions;
-create policy "구독 조회" on public.push_subscriptions for select using (true);
 drop policy if exists "구독 저장" on public.push_subscriptions;
-create policy "구독 저장" on public.push_subscriptions for insert with check (true);
 drop policy if exists "구독 수정" on public.push_subscriptions;
-create policy "구독 수정" on public.push_subscriptions for update using (true);
 drop policy if exists "구독 삭제" on public.push_subscriptions;
-create policy "구독 삭제" on public.push_subscriptions for delete using (true);
+-- 허용 정책이 없으므로 REST 직접 접근은 모두 막히고, service_role 과 아래 RPC 만 접근합니다.
+revoke all on public.push_subscriptions from anon, authenticated;
+
+create or replace function public.push_get_slots(p_endpoint text)
+returns table (slot smallint, days smallint[], time_hhmm text, enabled boolean)
+language sql security definer set search_path = public as $$
+  select slot, days, time_hhmm, enabled
+  from public.push_subscriptions
+  where endpoint = p_endpoint
+  order by slot;
+$$;
+
+create or replace function public.push_upsert(
+  p_endpoint text, p_slot smallint, p_p256dh text, p_auth text,
+  p_days smallint[], p_time_hhmm text, p_tz text, p_enabled boolean
+) returns void language plpgsql security definer set search_path = public as $$
+begin
+  insert into public.push_subscriptions
+    (endpoint, slot, p256dh, auth, user_id, days, time_hhmm, tz, enabled, updated_at)
+  values
+    (p_endpoint, coalesce(p_slot, 0::smallint), p_p256dh, p_auth, auth.uid(),
+     coalesce(p_days, '{}'), coalesce(p_time_hhmm, '21:00'),
+     coalesce(p_tz, 'Asia/Seoul'), coalesce(p_enabled, false), now())
+  on conflict (endpoint, slot) do update set
+    p256dh = excluded.p256dh, auth = excluded.auth,
+    user_id = coalesce(auth.uid(), public.push_subscriptions.user_id),
+    days = excluded.days, time_hhmm = excluded.time_hhmm,
+    tz = excluded.tz, enabled = excluded.enabled, updated_at = now();
+end; $$;
+
+create or replace function public.push_claim(p_endpoint text)
+returns void language sql security definer set search_path = public as $$
+  update public.push_subscriptions set user_id = auth.uid()
+  where endpoint = p_endpoint and user_id is null and auth.uid() is not null;
+$$;
+
+create or replace function public.push_delete_slot(p_endpoint text, p_slot smallint)
+returns void language sql security definer set search_path = public as $$
+  delete from public.push_subscriptions where endpoint = p_endpoint and slot = p_slot;
+$$;
+
+create or replace function public.push_delete_others(p_endpoint text, p_keep smallint[])
+returns void language sql security definer set search_path = public as $$
+  delete from public.push_subscriptions
+  where endpoint = p_endpoint and not (slot = any(coalesce(p_keep, '{}')));
+$$;
+
+create or replace function public.push_disable(p_endpoint text)
+returns void language sql security definer set search_path = public as $$
+  update public.push_subscriptions set enabled = false where endpoint = p_endpoint;
+$$;
+
+do $$
+declare fn text;
+begin
+  foreach fn in array array[
+    'push_get_slots(text)',
+    'push_upsert(text,smallint,text,text,smallint[],text,text,boolean)',
+    'push_claim(text)',
+    'push_delete_slot(text,smallint)',
+    'push_delete_others(text,smallint[])',
+    'push_disable(text)'
+  ] loop
+    execute format('revoke all on function public.%s from public;', fn);
+    execute format('grant execute on function public.%s to anon, authenticated;', fn);
+  end loop;
+end $$;
