@@ -130,10 +130,14 @@ export default function MyPrayerScreen() {
   // 온 성도가 함께 드린 기도시간(초). 서버에서는 모든 성도의 개인·공동 기도를 집계합니다.
   const churchTotal = useAsyncData(() => repository.getChurchPrayerSeconds().catch(() => 0), []);
 
-  // 이 탭으로 돌아올 때마다 최신 합계로 갱신합니다. (값이 그대로면 애니메이션은 일어나지 않습니다)
+  // 이 탭을 보고 있는 동안 주기적으로(12초) 최신 합계를 가져옵니다.
+  // 다른 성도가 기도를 마치면 그만큼 숫자가 올라가고, 바뀔 때마다 부드럽게 카운트업됩니다.
+  // (값이 그대로면 애니메이션은 일어나지 않습니다. 탭을 떠나면 갱신을 멈춥니다.)
   useFocusEffect(
     useCallback(() => {
       churchTotal.reload();
+      const id = setInterval(() => churchTotal.reload(), 12000);
+      return () => clearInterval(id);
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []),
   );
@@ -179,8 +183,8 @@ function ChurchTotalBlock({ seconds, ready }: { seconds: number; ready: boolean 
           온 성도가 함께 드린 기도
         </ThemedText>
       </View>
-      <ThemedText fixed style={[styles.churchValue, { color: theme.primary }]}>
-        {ready ? formatChurchTotal(animated) : '—'}
+      <ThemedText fixed numberOfLines={1} style={[styles.churchValue, { color: theme.primary }]}>
+        {ready ? formatChurchTotalPrecise(animated) : '—'}
       </ThemedText>
     </View>
   );
