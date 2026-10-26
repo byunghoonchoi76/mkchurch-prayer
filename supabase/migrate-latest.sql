@@ -147,9 +147,9 @@ security definer
 set search_path = public
 as $$
   insert into public.prayer_time (user_id, date, kind, minutes)
-  values (auth.uid(), p_date, p_kind, greatest(0, p_minutes))
+  values (auth.uid(), p_date, p_kind, least(greatest(0, p_minutes), 1440))
   on conflict (user_id, date, kind)
-  do update set minutes = public.prayer_time.minutes + greatest(0, p_minutes);
+  do update set minutes = public.prayer_time.minutes + least(greatest(0, p_minutes), 1440);
 $$;
 grant execute on function public.add_prayer_time(date, text, integer) to authenticated;
 
