@@ -178,8 +178,8 @@ function ChurchTotalBlock({ seconds, ready }: { seconds: number; ready: boolean 
   return (
     <View style={styles.churchTotal} accessibilityRole="summary">
       <View style={styles.churchLabelRow}>
-        <Ionicons name="people" size={15} color={theme.textMuted} />
-        <ThemedText type="small" themeColor="textMuted" fixed>
+        <Ionicons name="people" size={18} color={theme.textMuted} />
+        <ThemedText themeColor="textMuted" fixed style={styles.churchLabelText}>
           온 성도가 함께 드린 기도
         </ThemedText>
       </View>
@@ -818,6 +818,7 @@ const styles = StyleSheet.create({
   // 온 성도가 함께 드린 기도 — 타이머 아래 보조 블록
   churchTotal: { alignItems: 'center', gap: 3 },
   churchLabelRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.one },
+  churchLabelText: { fontSize: 16, fontWeight: '600' },
   churchValue: { fontSize: 27, fontWeight: '800', letterSpacing: -0.3, fontVariant: ['tabular-nums'] },
   // 기도 모드 안 — 실시간으로 올라가는 온 성도 누적
   focusChurch: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.one, marginTop: Spacing.one },
