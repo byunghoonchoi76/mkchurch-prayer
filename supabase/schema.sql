@@ -178,8 +178,11 @@ as $$
   update public.prayer_requests
   set pray_count = pray_count + 1
   where id = request_id
+    and (shared or author_id = auth.uid() or public.is_admin())
   returning *;
 $$;
+revoke all on function public.increment_pray_count(uuid) from public;
+grant execute on function public.increment_pray_count(uuid) to authenticated;
 
 -- 공동 기도제목 — 온 성도가 함께 기도하며 시간(분)을 쌓아 가는 교회 공통 제목
 create table if not exists public.communal_prayers (
@@ -224,9 +227,9 @@ security definer
 set search_path = public
 as $$
   insert into public.prayer_time (user_id, date, kind, minutes)
-  values (auth.uid(), p_date, p_kind, greatest(0, p_minutes))
+  values (auth.uid(), p_date, p_kind, least(greatest(0, p_minutes), 1440))
   on conflict (user_id, date, kind)
-  do update set minutes = public.prayer_time.minutes + greatest(0, p_minutes);
+  do update set minutes = public.prayer_time.minutes + least(greatest(0, p_minutes), 1440);
 $$;
 grant execute on function public.add_prayer_time(date, text, integer) to authenticated;
 
@@ -453,11 +456,12 @@ create policy "기도제목 조회" on public.prayer_requests
 
 drop policy if exists "기도제목 작성" on public.prayer_requests;
 create policy "기도제목 작성" on public.prayer_requests
-  for insert with check (auth.uid() is not null);
+  for insert with check (auth.uid() = author_id);
 
 drop policy if exists "기도제목 수정" on public.prayer_requests;
 create policy "기도제목 수정" on public.prayer_requests
-  for update using (auth.uid() = author_id or public.is_admin());
+  for update using (auth.uid() = author_id or public.is_admin())
+  with check (auth.uid() = author_id or public.is_admin());
 
 drop policy if exists "기도제목 삭제" on public.prayer_requests;
 create policy "기도제목 삭제" on public.prayer_requests
