@@ -471,6 +471,7 @@ function PrayerFocusModal({
               <ThemedText type="smallBold" themeColor="primary" fixed style={styles.tabular}>
                 {formatChurchTotalPrecise(churchBaseSeconds + elapsedSeconds)}
               </ThemedText>
+              {'  '}기도중입니다.
             </ThemedText>
           </View>
         ) : null}
