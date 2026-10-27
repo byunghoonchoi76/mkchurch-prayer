@@ -159,9 +159,6 @@ export default function MyPrayerScreen() {
       <View style={styles.homeBody}>
         <TimerCard active={active} goal={goal} churchBaseSeconds={churchSeconds} onComplete={churchTotal.reload} />
         <ChurchTotalBlock seconds={churchSeconds} ready={churchTotal.data != null} />
-        <ThemedText type="small" themeColor="textMuted" style={styles.homeNote}>
-          기도제목과 기록은 아래 탭에서 볼 수 있어요.
-        </ThemedText>
       </View>
     </Screen>
   );
