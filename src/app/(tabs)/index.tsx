@@ -126,6 +126,7 @@ export default function MyPrayerScreen() {
   // 개인 + 공동 참여 시간을 하나로 합쳐 봅니다.
   const active = useAllPrayerTime();
   const { goal } = useWeeklyGoal('personal');
+  const insets = useSafeAreaInsets();
 
   // 온 성도가 함께 드린 기도시간(초). 서버에서는 모든 성도의 개인·공동 기도를 집계합니다.
   const churchTotal = useAsyncData(() => repository.getChurchPrayerSeconds().catch(() => 0), []);
@@ -155,8 +156,8 @@ export default function MyPrayerScreen() {
         <ThemedText style={styles.heroSubtitle}>오늘도 기도로 하루를 밝혀요 · 시편 27:1</ThemedText>
       </HeroBanner>
 
-      {/* 큰 기도 타이머 — 남은 공간의 세로 중앙 */}
-      <View style={styles.homeBody}>
+      {/* 큰 기도 타이머 — 남은 공간의 세로 중앙(아래 탭에 가리지 않도록 위로 올림) */}
+      <View style={[styles.homeBody, { paddingBottom: insets.bottom + Spacing.five + Spacing.four }]}>
         <TimerCard active={active} goal={goal} churchBaseSeconds={churchSeconds} onComplete={churchTotal.reload} />
         <ChurchTotalBlock seconds={churchSeconds} ready={churchTotal.data != null} />
       </View>
@@ -820,7 +821,7 @@ const styles = StyleSheet.create({
   churchTotal: { alignItems: 'center', gap: 3 },
   churchLabelRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.one },
   churchLabelText: { fontSize: 16, fontWeight: '600' },
-  churchValue: { fontSize: 33, fontWeight: '800', letterSpacing: -0.3, fontVariant: ['tabular-nums'], marginVertical: 1 },
+  churchValue: { fontSize: 32, lineHeight: 42, fontWeight: '800', letterSpacing: -0.3, fontVariant: ['tabular-nums'], paddingVertical: 2 },
   // 기도 모드 안 — 실시간으로 올라가는 온 성도 누적
   focusChurch: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.one, marginTop: Spacing.one },
   tabular: { fontVariant: ['tabular-nums'] },
