@@ -157,7 +157,7 @@ export default function MyPrayerScreen() {
       </HeroBanner>
 
       {/* 큰 기도 타이머 — 남은 공간의 세로 중앙(아래 탭에 가리지 않도록 위로 올림) */}
-      <View style={[styles.homeBody, { paddingBottom: insets.bottom + Spacing.five + Spacing.four }]}>
+      <View style={[styles.homeBody, { paddingBottom: insets.bottom + Spacing.two }]}>
         <TimerCard active={active} goal={goal} churchBaseSeconds={churchSeconds} onComplete={churchTotal.reload} />
         <ChurchTotalBlock seconds={churchSeconds} ready={churchTotal.data != null} />
       </View>
