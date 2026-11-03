@@ -14,7 +14,7 @@ create policy "기도제목 수정" on public.prayer_requests
   for update using (auth.uid() = author_id or public.is_admin())
   with check (auth.uid() = author_id or public.is_admin());
 
--- ── 3) add_prayer_time: 1회 입력 분(分) 상한 1440 (개인 기도시간 부풀리기 차단) ──
+-- ── 3) add_prayer_time: 1회 입력 상한 86400초(=24시간). 단위가 초이므로 1440이 아니라 86400 (24분에서 잘리던 버그 수정) ──
 create or replace function public.add_prayer_time(p_date date, p_kind text, p_minutes integer)
 returns void
 language sql
@@ -22,9 +22,9 @@ security definer
 set search_path = public
 as $$
   insert into public.prayer_time (user_id, date, kind, minutes)
-  values (auth.uid(), p_date, p_kind, least(greatest(0, p_minutes), 1440))
+  values (auth.uid(), p_date, p_kind, least(greatest(0, p_minutes), 86400))
   on conflict (user_id, date, kind)
-  do update set minutes = public.prayer_time.minutes + least(greatest(0, p_minutes), 1440);
+  do update set minutes = public.prayer_time.minutes + least(greatest(0, p_minutes), 86400);
 $$;
 
 -- ── 4) increment_pray_count: 로그인 전용 + 볼 수 있는 글만 (익명 호출·비공개 노출 차단) ──

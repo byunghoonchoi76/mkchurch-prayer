@@ -202,7 +202,7 @@ security definer
 set search_path = public
 as $$
   update public.communal_prayers
-  set total_minutes = total_minutes + least(greatest(0, p_minutes), 1440)
+  set total_minutes = total_minutes + least(greatest(0, p_minutes), 86400)
   where id = p_id
   returning *;
 $$;
@@ -227,9 +227,9 @@ security definer
 set search_path = public
 as $$
   insert into public.prayer_time (user_id, date, kind, minutes)
-  values (auth.uid(), p_date, p_kind, least(greatest(0, p_minutes), 1440))
+  values (auth.uid(), p_date, p_kind, least(greatest(0, p_minutes), 86400))
   on conflict (user_id, date, kind)
-  do update set minutes = public.prayer_time.minutes + least(greatest(0, p_minutes), 1440);
+  do update set minutes = public.prayer_time.minutes + least(greatest(0, p_minutes), 86400);
 $$;
 grant execute on function public.add_prayer_time(date, text, integer) to authenticated;
 

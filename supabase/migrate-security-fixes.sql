@@ -133,14 +133,14 @@ create policy "기도제목 조회" on public.prayer_requests
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 -- 4) [높음] add_communal_prayer_minutes — 익명 호출로 수치 무한 조작 완화
 --    익명 공동기도 기능은 유지하되, 한 번 호출로 더할 수 있는 분(分)에
---    상한(하루치=1440분)을 두어 비정상적인 부풀리기를 제한합니다.
+--    상한(하루치=86400초=24시간)을 두어 비정상적인 부풀리기를 제한합니다.
 --    ※ 완전한 남용 방지는 Edge Function + 속도 제한이 필요합니다(별도 과제).
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 create or replace function public.add_communal_prayer_minutes(p_id uuid, p_minutes integer)
 returns setof public.communal_prayers
 language sql security definer set search_path = public as $$
   update public.communal_prayers
-  set total_minutes = total_minutes + least(greatest(0, p_minutes), 1440)
+  set total_minutes = total_minutes + least(greatest(0, p_minutes), 86400)
   where id = p_id
   returning *;
 $$;
