@@ -630,3 +630,31 @@ begin
     execute format('grant execute on function public.%s to anon, authenticated;', fn);
   end loop;
 end $$;
+
+-- ── 기도 타이머 넛지(일회성 예약 푸시) ───────────────────────────
+-- 아멘을 깜빡하고 앱을 닫아 둬도, 잠시 뒤 "열어 둔 기도를 마무리하세요" 푸시가 오게 합니다.
+-- send-reminders Edge Function 이 매분 예약 시각이 지난 넛지를 보내고 지웁니다.
+create table if not exists public.prayer_nudges (
+  endpoint text primary key,
+  fire_at timestamptz not null,
+  body text not null default '',
+  created_at timestamptz not null default now()
+);
+create index if not exists prayer_nudges_fire_at_idx on public.prayer_nudges (fire_at);
+alter table public.prayer_nudges enable row level security;
+revoke all on public.prayer_nudges from anon, authenticated;
+
+create or replace function public.prayer_nudge_set(p_endpoint text, p_fire_at timestamptz, p_body text)
+returns void language sql security definer set search_path = public as $$
+  insert into public.prayer_nudges (endpoint, fire_at, body)
+  values (p_endpoint, p_fire_at, coalesce(p_body, ''))
+  on conflict (endpoint) do update
+    set fire_at = excluded.fire_at, body = excluded.body, created_at = now();
+$$;
+grant execute on function public.prayer_nudge_set(text, timestamptz, text) to anon, authenticated;
+
+create or replace function public.prayer_nudge_clear(p_endpoint text)
+returns void language sql security definer set search_path = public as $$
+  delete from public.prayer_nudges where endpoint = p_endpoint;
+$$;
+grant execute on function public.prayer_nudge_clear(text) to anon, authenticated;

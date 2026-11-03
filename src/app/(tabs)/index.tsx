@@ -31,6 +31,7 @@ import {
 import { useDailyGoal, useWeeklyGoal } from '@/lib/prayer-goal';
 import { useAllPrayerTime, usePrayerTime } from '@/lib/prayer-log';
 import { clearActiveSession, loadActiveSession, saveActiveSession } from '@/lib/prayer-session';
+import { cancelPrayerNudge, schedulePrayerNudge } from '@/lib/prayer-nudge';
 import { allTimeSeconds, goalLabel, monthSeconds, weekSeconds } from '@/lib/prayer-stats';
 
 /** 기도 시작 버튼에 쓰는 다이얼 이미지 */
@@ -293,6 +294,8 @@ function TimerCard({
   // 오늘 기도 목표를 채우면 뜨는 안내. "기록하고 마치기"를 누르면 바로 저장하고 끝냅니다.
   // (아멘을 깜빡하고 타이머를 오래 켜 두는 것을 막아 줍니다.)
   const confirmGoalReached = (goalMin: number) => {
+    // 화면에서 직접 안내했으니, 예약해 둔 백그라운드 넛지는 중복으로 오지 않게 취소합니다.
+    void cancelPrayerNudge();
     const title = '오늘 기도 목표 달성 🙏';
     const body = `오늘 기도 목표 ${goalMin}분을 채웠어요.\n지금까지 기도를 기록하고 마칠까요?`;
     if (Platform.OS === 'web') {
@@ -324,6 +327,14 @@ function TimerCard({
     setRunning(true);
     if (bgm.enabled) bgm.start();
     persist();
+    // 백그라운드 넛지 예약: 아멘을 깜빡하고 앱을 닫아 둬도, 목표 시간쯤 휴대폰으로
+    // "열어 둔 기도를 마무리하세요" 푸시가 오도록 서버에 예약합니다.
+    // (알림을 켜 둔 기기에만 옵니다. 아멘·목표 달성 안내 시 취소됩니다.)
+    const remainingToGoalSec = Math.max(60, dailyGoal * 60 - active.todayMinutes);
+    void schedulePrayerNudge(
+      remainingToGoalSec,
+      `열어 둔 기도가 있어요. 앱을 열어 ‘아멘’으로 오늘 기도를 기록해 주세요. 🙏`,
+    );
   };
 
   const pause = () => {
@@ -395,6 +406,7 @@ function TimerCard({
     setElapsed(0);
     bgm.stop();
     void clearActiveSession(); // 정상적으로 마쳤으니 임시 저장분을 지웁니다.
+    void cancelPrayerNudge(); // 마쳤으니 예약해 둔 백그라운드 넛지도 취소합니다.
     if (secs > 0) {
       await active.addMinutes(secs);
       setResultSeconds(secs);

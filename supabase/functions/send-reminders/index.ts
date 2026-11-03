@@ -96,7 +96,49 @@ Deno.serve(async () => {
     }
   }
 
-  return new Response(JSON.stringify({ ok: true, checked: rows.length, sent, cleaned }), {
+  // ── 기도 타이머 넛지(일회성 예약 푸시) ───────────────────────────
+  // 예약 시각이 지난 넛지를 한 번 보내고 지웁니다. 아멘을 깜빡하고 앱을 닫아 둔 경우용.
+  let nudged = 0;
+  try {
+    const { data: nudges } = await supabase
+      .from('prayer_nudges')
+      .select('endpoint, body')
+      .lte('fire_at', new Date().toISOString());
+
+    for (const n of (nudges ?? []) as { endpoint: string; body: string }[]) {
+      // 발송 키는 push_subscriptions 에서 가져옵니다(slot 0 우선).
+      const { data: subs } = await supabase
+        .from('push_subscriptions')
+        .select('p256dh, auth')
+        .eq('endpoint', n.endpoint)
+        .order('slot')
+        .limit(1);
+      const sub = (subs ?? [])[0] as { p256dh: string; auth: string } | undefined;
+
+      // 보냈든(구독 없음 포함) 못 보냈든 넛지는 1회성이므로 먼저 지웁니다.
+      await supabase.from('prayer_nudges').delete().eq('endpoint', n.endpoint);
+      if (!sub) continue;
+
+      const payload = JSON.stringify({
+        title: '기도를 마무리해 주세요 🙏',
+        body: n.body || '열어 둔 기도가 있어요. 앱을 열어 ‘아멘’으로 기록해 주세요.',
+        url: APP_URL,
+      });
+      try {
+        await webpush.sendNotification({ endpoint: n.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload);
+        nudged += 1;
+      } catch (e) {
+        const status = (e as { statusCode?: number })?.statusCode;
+        if (status === 404 || status === 410) {
+          await supabase.from('push_subscriptions').delete().eq('endpoint', n.endpoint);
+        }
+      }
+    }
+  } catch (_e) {
+    // 넛지 처리 실패는 기도 리마인더 발송에 영향 주지 않도록 무시합니다.
+  }
+
+  return new Response(JSON.stringify({ ok: true, checked: rows.length, sent, cleaned, nudged }), {
     headers: { 'content-type': 'application/json' },
   });
 });
