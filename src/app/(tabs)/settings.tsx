@@ -164,6 +164,25 @@ function GoalSettings() {
     }
   };
 
+  // 하루 기도 목표 — 분 단위로 직접 입력받습니다.
+  const [dailyOpen, setDailyOpen] = useState(false);
+  const [dailyText, setDailyText] = useState('');
+  const [dailyError, setDailyError] = useState<string | undefined>();
+  const startDaily = () => {
+    setDailyText(String(dailyGoal));
+    setDailyError(undefined);
+    setDailyOpen(true);
+  };
+  const applyDaily = () => {
+    const mins = parseInt(dailyText.replace(/,/g, '').trim(), 10);
+    if (!Number.isFinite(mins) || mins < dailyCfg.min || mins > dailyCfg.max) {
+      setDailyError(`${dailyCfg.min} ~ ${dailyCfg.max.toLocaleString('ko-KR')}분 사이로 입력해 주세요.`);
+      return;
+    }
+    setDailyGoal(mins);
+    setDailyOpen(false);
+  };
+
   return (
     <View>
       <SectionHeader title="기도 목표" />
@@ -190,16 +209,17 @@ function GoalSettings() {
       <Card>
         <ThemedText type="smallBold">하루 기도 목표</ThemedText>
         <ThemedText type="caption" themeColor="textSecondary">
-          하루에 기도할 목표 시간이에요. 기도 중 오늘 누적이 이 시간을 넘기면 “기록하고 마칠까요?” 하고 안내해, 아멘을 깜빡해도 시간이 과하게 쌓이지 않게 해 줍니다.
+          하루에 기도할 목표 시간이에요. 기도 중 오늘 누적이 이 시간을 넘기면 “기록하고 마칠까요?” 하고 안내해, 아멘을 깜빡해도 시간이 과하게 쌓이지 않게 해 줍니다. 가운데를 눌러 원하는 분(分)을 직접 입력할 수 있어요.
         </ThemedText>
         <View style={styles.goalStepRow}>
           <Pressable onPress={() => setDailyGoal(dailyGoal - dailyCfg.step)} hitSlop={8} style={[styles.goalStep, { borderColor: theme.border }]}>
             <Ionicons name="remove" size={18} color={theme.textSecondary} />
           </Pressable>
-          <View style={[styles.goalValueBtn, { borderColor: theme.primary, backgroundColor: theme.backgroundSelected }]}>
+          <Pressable onPress={startDaily} style={[styles.goalValueBtn, { borderColor: theme.primary, backgroundColor: theme.backgroundSelected }]}>
             <ThemedText type="caption" themeColor="textMuted" numberOfLines={1}>목표 </ThemedText>
             <ThemedText type="smallBold" themeColor="primary" numberOfLines={1} style={styles.flexShrink}>{goalLabel(dailyGoal)}</ThemedText>
-          </View>
+            <Ionicons name="create-outline" size={14} color={theme.primary} style={{ marginLeft: 4 }} />
+          </Pressable>
           <Pressable onPress={() => setDailyGoal(dailyGoal + dailyCfg.step)} hitSlop={8} style={[styles.goalStep, { borderColor: theme.border }]}>
             <Ionicons name="add" size={18} color={theme.textSecondary} />
           </Pressable>
@@ -234,6 +254,39 @@ function GoalSettings() {
             <View style={styles.goalBtnRow}>
               <Button label="취소" variant="ghost" style={styles.flex} onPress={() => setOpen(false)} />
               <Button label="저장" style={styles.flex} loading={saving} onPress={() => void apply()} />
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={dailyOpen} transparent animationType="fade" onRequestClose={() => setDailyOpen(false)}>
+        <Pressable style={styles.goalBackdrop} onPress={() => setDailyOpen(false)}>
+          <Pressable style={[styles.goalSheet, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => {}}>
+            <ThemedText type="smallBold" style={styles.goalCenter}>하루 기도 목표 시간</ThemedText>
+            <ThemedText type="caption" themeColor="textMuted" style={styles.goalCenter}>하루에 기도할 목표 시간이에요.</ThemedText>
+            <View style={[styles.goalInputRow, { borderColor: theme.border, backgroundColor: theme.backgroundElement }]}>
+              <TextInput
+                value={dailyText}
+                onChangeText={setDailyText}
+                keyboardType="numeric"
+                placeholder="0"
+                placeholderTextColor={theme.textMuted}
+                style={[styles.goalInput, { color: theme.text }]}
+                autoFocus
+              />
+              <ThemedText type="small" themeColor="textSecondary">분</ThemedText>
+            </View>
+            <ThemedText type="caption" themeColor="textMuted" style={styles.goalCenter}>
+              {dailyCfg.min} ~ {dailyCfg.max.toLocaleString('ko-KR')}분 사이로 입력하세요.
+            </ThemedText>
+            {dailyError ? (
+              <ThemedText type="caption" themeColor="danger" style={styles.goalCenter}>
+                {dailyError}
+              </ThemedText>
+            ) : null}
+            <View style={styles.goalBtnRow}>
+              <Button label="취소" variant="ghost" style={styles.flex} onPress={() => setDailyOpen(false)} />
+              <Button label="저장" style={styles.flex} onPress={applyDaily} />
             </View>
           </Pressable>
         </Pressable>

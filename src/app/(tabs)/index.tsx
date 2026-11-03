@@ -562,25 +562,49 @@ function PrayerFocusModal({
   const chosen = selectedTopics(byKind, selection);
   const ordered = [...chosen.filter((t) => !t.answered), ...chosen.filter((t) => t.answered)];
 
-  // 기도제목을 일정 시간마다 한 장씩 자동으로 넘겨 가며 보여 줍니다.
+  // 기도제목을 한 장씩 보여 줍니다. 좌우로 밀어 직접 넘길 수 있고(아래 ScrollView),
+  // 넘기기 전까지는 일정 시간마다 자동으로 다음 제목으로 넘어갑니다.
   const [topicIdx, setTopicIdx] = useState(0);
   const count = ordered.length;
   const selectionKey = `${selection.allCategories.join(',')}|${selection.selectedIds.join(',')}`;
+  const topicScrollRef = useRef<ScrollView>(null);
+  const [cardW, setCardW] = useState(0);
+  const posRef = useRef(0); // 현재 보이는 장(스크롤 위치 기준). 자동 넘김이 다음 장을 계산할 때 씁니다.
+  const manualRef = useRef(false); // 사용자가 한 번이라도 직접 넘기면 자동 넘김을 멈춥니다.
 
   // 기도 모드가 열릴 때, 또 선택을 바꿀 때 처음 제목부터 시작합니다.
   useEffect(() => {
-    if (visible) setTopicIdx(0);
+    if (visible) {
+      manualRef.current = false;
+      posRef.current = 0;
+      setTopicIdx(0);
+      topicScrollRef.current?.scrollTo({ x: 0, animated: false });
+    }
   }, [visible, selectionKey]);
 
-  // 일정 시간(TOPIC_ROTATE_MS)마다 다음 제목으로. 일시정지 중에는 멈춥니다.
+  // 일정 시간(TOPIC_ROTATE_MS)마다 다음 장으로 '스크롤'합니다. (스크롤이 현재 장을 결정 — dots/카운터도 따라옵니다.)
+  // 일시정지 중이거나 사용자가 직접 넘긴 뒤에는 멈춥니다.
   useEffect(() => {
-    if (!visible || paused || count <= 1) return;
-    const t = setInterval(() => setTopicIdx((i) => (i + 1) % count), TOPIC_ROTATE_MS);
+    if (!visible || paused || count <= 1 || cardW <= 0) return;
+    const t = setInterval(() => {
+      if (manualRef.current) return;
+      const next = (posRef.current + 1) % count;
+      topicScrollRef.current?.scrollTo({ x: next * cardW, animated: true });
+    }, TOPIC_ROTATE_MS);
     return () => clearInterval(t);
-  }, [visible, paused, count]);
+  }, [visible, paused, count, cardW]);
 
-  const pos = count ? topicIdx % count : 0;
-  const current = count ? ordered[pos] : null;
+  // 스크롤 위치로 현재 장을 계산해 dots·카운터(n/m)를 실시간으로 맞춥니다. (웹·앱 모두 onScroll 은 안정적으로 동작)
+  const onTopicScroll = (e: { nativeEvent: { contentOffset: { x: number } } }) => {
+    if (cardW <= 0) return;
+    const idx = Math.round(e.nativeEvent.contentOffset.x / cardW);
+    if (idx >= 0 && idx < count && idx !== posRef.current) {
+      posRef.current = idx;
+      setTopicIdx(idx);
+    }
+  };
+
+  const pos = count ? Math.min(topicIdx, count - 1) : 0;
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onStop}>
@@ -659,28 +683,57 @@ function PrayerFocusModal({
         </View>
 
         <View style={styles.focusTopicArea}>
-          {current ? (
-            <Pressable
-              onPress={() => count > 1 && setTopicIdx((i) => (i + 1) % count)}
-              style={[styles.focusTopicCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-              <View style={styles.focusTopicMeta}>
-                <View style={[styles.kindBadge, { backgroundColor: theme.primary + '18', borderColor: theme.primary + '40' }]}>
-                  <ThemedText type="caption" fixed style={{ color: theme.primary, fontWeight: '700' }}>
-                    {TODAY_PRAYER_LABEL[current.kind].long}
-                  </ThemedText>
-                </View>
-                {current.category ? <CategoryChip category={current.category} /> : null}
-                {current.answered ? <Ionicons name="checkmark-circle" size={16} color={theme.success} /> : null}
+          {count > 0 ? (
+            <>
+              {/* 좌우로 밀어 기도제목을 넘겨 봅니다(한 장씩 딱 맞게 멈춤). */}
+              <View style={styles.topicScrollWrap} onLayout={(e) => setCardW(Math.round(e.nativeEvent.layout.width))}>
+                {cardW > 0 ? (
+                  <ScrollView
+                    ref={topicScrollRef}
+                    horizontal
+                    pagingEnabled
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.topicScrollContent}
+                    scrollEventThrottle={16}
+                    onScroll={onTopicScroll}
+                    onScrollBeginDrag={() => {
+                      manualRef.current = true;
+                    }}>
+                    {ordered.map((t) => (
+                      <View key={t.id} style={[styles.topicPage, { width: cardW }]}>
+                        <View style={[styles.focusTopicCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                          <View style={styles.focusTopicMeta}>
+                            <View style={[styles.kindBadge, { backgroundColor: theme.primary + '18', borderColor: theme.primary + '40' }]}>
+                              <ThemedText type="caption" fixed style={{ color: theme.primary, fontWeight: '700' }}>
+                                {TODAY_PRAYER_LABEL[t.kind].long}
+                              </ThemedText>
+                            </View>
+                            {t.category ? <CategoryChip category={t.category} /> : null}
+                            {t.answered ? <Ionicons name="checkmark-circle" size={16} color={theme.success} /> : null}
+                          </View>
+                          <ThemedText type="subtitle" style={[styles.center, t.answered && styles.focusAnswered]}>
+                            {formatTopicText(t.title)}
+                          </ThemedText>
+                          {t.body ? (
+                            <ThemedText type="small" themeColor="textSecondary" style={[styles.center, t.answered && styles.focusAnswered]}>
+                              {formatTopicText(t.body)}
+                            </ThemedText>
+                          ) : null}
+                        </View>
+                      </View>
+                    ))}
+                  </ScrollView>
+                ) : null}
               </View>
-              <ThemedText type="subtitle" style={[styles.center, current.answered && styles.focusAnswered]}>
-                {formatTopicText(current.title)}
-              </ThemedText>
-              {current.body ? (
-                <ThemedText type="small" themeColor="textSecondary" style={[styles.center, current.answered && styles.focusAnswered]}>
-                  {formatTopicText(current.body)}
-                </ThemedText>
+
+              {count > 1 ? (
+                <View style={styles.dotsRow}>
+                  {ordered.map((t, i) => (
+                    <View key={t.id} style={[styles.dot, { backgroundColor: i === pos ? theme.primary : theme.border }]} />
+                  ))}
+                </View>
               ) : null}
-            </Pressable>
+            </>
           ) : (
             <View style={[styles.focusEmpty, { borderColor: theme.border }]}>
               <ThemedText type="small" themeColor="textMuted" style={styles.center}>
@@ -688,14 +741,6 @@ function PrayerFocusModal({
               </ThemedText>
             </View>
           )}
-
-          {count > 1 ? (
-            <View style={styles.dotsRow}>
-              {ordered.map((t, i) => (
-                <View key={t.id} style={[styles.dot, { backgroundColor: i === pos ? theme.primary : theme.border }]} />
-              ))}
-            </View>
-          ) : null}
         </View>
 
         <View style={styles.focusButtonRow}>
@@ -984,6 +1029,9 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   focusTopicArea: { flex: 1, justifyContent: 'center', gap: Spacing.three },
+  topicScrollWrap: { alignSelf: 'stretch' },
+  topicScrollContent: { alignItems: 'center' },
+  topicPage: { justifyContent: 'center', paddingHorizontal: Spacing.one },
   focusTopicCard: {
     borderRadius: Radius.large,
     borderWidth: StyleSheet.hairlineWidth,
