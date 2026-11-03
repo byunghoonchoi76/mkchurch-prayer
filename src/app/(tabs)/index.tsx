@@ -276,6 +276,7 @@ function TimerCard({
   const startedAtRef = useRef(0); // 이번 기도를 시작한 시각
   const lastPersistRef = useRef(0); // 마지막으로 기기에 저장한 시각(과도한 저장 방지)
   const goalAlertedRef = useRef(false); // 이번 세션에 목표 달성 안내를 이미 띄웠는지
+  const goalBaseRef = useRef(0); // 이번 기도 시작 시점의 '오늘 누적 기도(초)' — 목표선 교차 판정 기준
   const runningRef = useRef(false); // 리스너(화면 이탈·백그라운드)에서 현재 진행 여부를 읽기 위한 ref
   const stopRef = useRef<(() => Promise<void>) | undefined>(undefined);
 
@@ -320,6 +321,7 @@ function TimerCard({
     segStartRef.current = Date.now();
     startedAtRef.current = Date.now();
     goalAlertedRef.current = false;
+    goalBaseRef.current = active.todayMinutes; // 시작 시점의 오늘 누적(초)을 기준으로 삼습니다.
     lastPersistRef.current = Date.now();
     runningRef.current = true;
     setElapsed(0);
@@ -330,9 +332,10 @@ function TimerCard({
     // 백그라운드 넛지 예약: 아멘을 깜빡하고 앱을 닫아 둬도, 목표 시간쯤 휴대폰으로
     // "열어 둔 기도를 마무리하세요" 푸시가 오도록 서버에 예약합니다.
     // (알림을 켜 둔 기기에만 옵니다. 아멘·목표 달성 안내 시 취소됩니다.)
-    const remainingToGoalSec = Math.max(60, dailyGoal * 60 - active.todayMinutes);
+    // 시작 시점부터 '목표 시간'만큼 뒤에 알립니다(오늘 이미 목표를 넘겼어도 바로 울리지 않도록).
+    const nudgeDelaySec = Math.max(60, dailyGoal * 60);
     void schedulePrayerNudge(
-      remainingToGoalSec,
+      nudgeDelaySec,
       `열어 둔 기도가 있어요. 앱을 열어 ‘아멘’으로 오늘 기도를 기록해 주세요. 🙏`,
     );
   };
@@ -368,9 +371,10 @@ function TimerCard({
       setElapsed(ms);
       // 5초마다 진행 상황을 기기에 저장해 둡니다(아멘을 깜빡하거나 앱이 꺼져도 복구할 수 있도록).
       if (Date.now() - lastPersistRef.current > 5000) persist();
-      // 오늘 누적(이미 저장된 오늘분 + 지금 기도)이 일일 목표를 넘으면 한 번만 안내합니다.
-      if (!goalAlertedRef.current && dailyGoalSec > 0) {
-        const todayTotalSec = active.todayMinutes + Math.floor(ms / 1000);
+      // 이번 세션 '중에' 오늘 누적이 일일 목표를 넘어서는 순간에만 한 번 안내합니다.
+      // (시작 시점에 이미 목표를 넘겨 둔 경우에는 울리지 않습니다 — 시작하자마자 뜨는 문제 방지.)
+      if (!goalAlertedRef.current && dailyGoalSec > 0 && goalBaseRef.current < dailyGoalSec) {
+        const todayTotalSec = goalBaseRef.current + Math.floor(ms / 1000);
         if (todayTotalSec >= dailyGoalSec) {
           goalAlertedRef.current = true;
           confirmGoalReached(dailyGoal);
