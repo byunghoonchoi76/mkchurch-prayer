@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, AppState, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HeroBanner } from '@/components/hero-banner';
@@ -28,8 +28,9 @@ import {
   type TodayPrayerKind,
   type TodaySelection,
 } from '@/lib/today-prayer';
-import { useWeeklyGoal } from '@/lib/prayer-goal';
+import { useDailyGoal, useWeeklyGoal } from '@/lib/prayer-goal';
 import { useAllPrayerTime, usePrayerTime } from '@/lib/prayer-log';
+import { clearActiveSession, loadActiveSession, saveActiveSession } from '@/lib/prayer-session';
 import { allTimeSeconds, goalLabel, monthSeconds, weekSeconds } from '@/lib/prayer-stats';
 
 /** 기도 시작 버튼에 쓰는 다이얼 이미지 */
@@ -267,10 +268,42 @@ function TimerCard({
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [resultSeconds, setResultSeconds] = useState<number | null>(null);
 
+  // 일일 기도 목표(분) — 기도 중 오늘 누적이 이 시간을 넘기면 "기록하고 마칠까요?" 안내를 띄웁니다.
+  const { goal: dailyGoal } = useDailyGoal();
+
+  // 아멘을 깜빡해도 시간이 남도록: 진행 중 세션 저장/자동 저장/복구에 쓰는 보조 ref 들.
+  const startedAtRef = useRef(0); // 이번 기도를 시작한 시각
+  const lastPersistRef = useRef(0); // 마지막으로 기기에 저장한 시각(과도한 저장 방지)
+  const goalAlertedRef = useRef(false); // 이번 세션에 목표 달성 안내를 이미 띄웠는지
+  const runningRef = useRef(false); // 리스너(화면 이탈·백그라운드)에서 현재 진행 여부를 읽기 위한 ref
+  const stopRef = useRef<(() => Promise<void>) | undefined>(undefined);
+
   // 사용자가 고른 '오늘의 기도' 선택(전체 카테고리 + 개별 제목). 기기에 저장되어 유지됩니다.
   const { selection, setSelection } = useTodaySelection();
 
   const currentMs = () => baseRef.current + (segStartRef.current !== null ? Date.now() - segStartRef.current : 0);
+
+  // 진행 중인 기도를 기기에 임시 저장 (복구용). elapsedSec 은 '지금까지의 누적'이라 꺼져 있던 시간은 안 들어갑니다.
+  const persist = useCallback(() => {
+    if (!runningRef.current) return;
+    void saveActiveSession(Math.round(currentMs() / 1000), startedAtRef.current);
+    lastPersistRef.current = Date.now();
+  }, []);
+
+  // 오늘 기도 목표를 채우면 뜨는 안내. "기록하고 마치기"를 누르면 바로 저장하고 끝냅니다.
+  // (아멘을 깜빡하고 타이머를 오래 켜 두는 것을 막아 줍니다.)
+  const confirmGoalReached = (goalMin: number) => {
+    const title = '오늘 기도 목표 달성 🙏';
+    const body = `오늘 기도 목표 ${goalMin}분을 채웠어요.\n지금까지 기도를 기록하고 마칠까요?`;
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && window.confirm(`${title}\n\n${body}`)) void stopRef.current?.();
+    } else {
+      Alert.alert(title, body, [
+        { text: '계속 기도', style: 'cancel' },
+        { text: '기록하고 마치기', onPress: () => void stopRef.current?.() },
+      ]);
+    }
+  };
 
   // 개인·공동·중보 기도제목을 모두 불러와, 고른 선택에 맞게 보여 줍니다. (로그인 필요한 경우 비움)
   const topics = useAsyncData<TopicsByKind>(
@@ -282,10 +315,15 @@ function TimerCard({
     topics.reload();
     baseRef.current = 0;
     segStartRef.current = Date.now();
+    startedAtRef.current = Date.now();
+    goalAlertedRef.current = false;
+    lastPersistRef.current = Date.now();
+    runningRef.current = true;
     setElapsed(0);
     setPaused(false);
     setRunning(true);
     if (bgm.enabled) bgm.start();
+    persist();
   };
 
   const pause = () => {
@@ -296,6 +334,7 @@ function TimerCard({
     setElapsed(baseRef.current);
     setPaused(true);
     bgm.stop();
+    persist();
   };
   const resume = () => {
     segStartRef.current = Date.now();
@@ -312,34 +351,109 @@ function TimerCard({
 
   useEffect(() => {
     if (!running || paused) return;
-    intervalRef.current = setInterval(() => setElapsed(currentMs()), 500);
+    const dailyGoalSec = dailyGoal * 60;
+    intervalRef.current = setInterval(() => {
+      const ms = currentMs();
+      setElapsed(ms);
+      // 5초마다 진행 상황을 기기에 저장해 둡니다(아멘을 깜빡하거나 앱이 꺼져도 복구할 수 있도록).
+      if (Date.now() - lastPersistRef.current > 5000) persist();
+      // 오늘 누적(이미 저장된 오늘분 + 지금 기도)이 일일 목표를 넘으면 한 번만 안내합니다.
+      if (!goalAlertedRef.current && dailyGoalSec > 0) {
+        const todayTotalSec = active.todayMinutes + Math.floor(ms / 1000);
+        if (todayTotalSec >= dailyGoalSec) {
+          goalAlertedRef.current = true;
+          confirmGoalReached(dailyGoal);
+        }
+      }
+    }, 500);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [running, paused]);
+  }, [running, paused, dailyGoal]);
 
   const stopBgm = bgm.stop;
   useFocusEffect(
     useCallback(() => {
-      return () => stopBgm();
+      return () => {
+        // 화면을 벗어날 때(다른 탭으로 이동 등) 기도 중이면 자동으로 저장합니다.
+        // → 아멘을 깜빡해도 지금까지의 기도 시간이 사라지지 않습니다.
+        if (runningRef.current) void stopRef.current?.();
+        stopBgm();
+      };
     }, [stopBgm]),
   );
 
   const stop = async () => {
+    if (!runningRef.current) return; // 자동 저장·아멘이 겹쳐도 한 번만 기록되도록
     const secs = Math.round(currentMs() / 1000);
+    runningRef.current = false;
     setRunning(false);
     setPaused(false);
     baseRef.current = 0;
     segStartRef.current = null;
     setElapsed(0);
     bgm.stop();
+    void clearActiveSession(); // 정상적으로 마쳤으니 임시 저장분을 지웁니다.
     if (secs > 0) {
       await active.addMinutes(secs);
       setResultSeconds(secs);
       onComplete?.(); // 온 성도 누적 기도시간도 최신값으로 갱신
     }
   };
+  // 리스너·타이머에서 항상 최신 stop 을 쓰도록 ref 에 담아 둡니다(렌더 중 직접 대입 대신 effect 사용).
+  useEffect(() => {
+    stopRef.current = stop;
+  });
+
+  // 앱이 백그라운드로 갈 때(화면 잠금·앱 전환) 진행 상황을 저장해 둡니다.
+  // 앱이 강제 종료돼도, 저장해 둔 지점까지는 다음에 복구할 수 있습니다.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active' && runningRef.current) persist();
+    });
+    return () => sub.remove();
+  }, [persist]);
+
+  // 앱을 다시 켰을 때, 저장되지 않은 지난 기도가 남아 있으면 "이어서 기록할까요?"를 안내합니다.
+  const recoveredRef = useRef(false);
+  useEffect(() => {
+    if (recoveredRef.current) return;
+    recoveredRef.current = true;
+    void (async () => {
+      const s = await loadActiveSession();
+      if (!s || s.elapsedSec < 30) {
+        if (s) await clearActiveSession(); // 너무 짧으면(실수 탭 등) 조용히 버립니다.
+        return;
+      }
+      const m = Math.floor(s.elapsedSec / 60);
+      const sec = s.elapsedSec % 60;
+      const label = m > 0 ? `${m}분 ${sec}초` : `${sec}초`;
+      const title = '이어서 기록할까요?';
+      const body = `저장되지 않은 지난 기도 ${label}이 있어요.\n이 시간을 기도 기록에 더할까요?`;
+      const doSave = async () => {
+        await active.addMinutes(s.elapsedSec);
+        onComplete?.();
+      };
+      if (Platform.OS === 'web') {
+        if (typeof window !== 'undefined' && window.confirm(`${title}\n\n${body}`)) await doSave();
+        await clearActiveSession();
+      } else {
+        Alert.alert(title, body, [
+          { text: '버리기', style: 'destructive', onPress: () => void clearActiveSession() },
+          {
+            text: '기록하기',
+            onPress: () =>
+              void (async () => {
+                await doSave();
+                await clearActiveSession();
+              })(),
+          },
+        ]);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const seconds = Math.floor(elapsed / 1000);
   const display = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;

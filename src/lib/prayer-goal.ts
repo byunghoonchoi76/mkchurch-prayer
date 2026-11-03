@@ -65,6 +65,43 @@ export function useWeeklyGoal(kind: PrayerKind) {
   return { goal, setGoal, loading };
 }
 
+// ── 일일 기도 목표 ───────────────────────────────────────────────
+// 하루에 기도할 목표 시간(분). 기도 중 오늘 누적이 이 시간을 넘기면
+// "기록하고 마칠까요?" 안내가 떠서, 아멘을 깜빡하고 타이머를 오래 켜 두는 것을 막아 줍니다.
+// 이 기기에 저장됩니다(개인용).
+const DAILY_KEY = 'church-app/prayer-daily-goal';
+export const DAILY_GOAL_CONFIG: GoalConfig = { default: 30, min: 5, max: 60 * 24, step: 10 };
+
+export function useDailyGoal() {
+  const cfg = DAILY_GOAL_CONFIG;
+  const [goal, setGoalState] = useState<number>(cfg.default);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    AsyncStorage.getItem(DAILY_KEY)
+      .then((raw) => {
+        if (!active) return;
+        const parsed = raw ? parseInt(raw, 10) : NaN;
+        setGoalState(Number.isFinite(parsed) && parsed > 0 ? parsed : cfg.default);
+      })
+      .catch(() => {})
+      .finally(() => active && setLoading(false));
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const setGoal = useCallback((next: number) => {
+    const clamped = Math.min(cfg.max, Math.max(cfg.min, Math.round(next)));
+    setGoalState(clamped);
+    void AsyncStorage.setItem(DAILY_KEY, String(clamped));
+  }, [cfg.max, cfg.min]);
+
+  return { goal, setGoal, loading };
+}
+
 // ── 공동 기도 목표 (교회 공통값) ─────────────────────────────────
 // 서버(app_settings.communal_goal_minutes)에 저장되어 관리자가 바꾸면 모든 성도에게 반영됩니다.
 // Supabase 미연결(샘플 모드)에서는 이 기기에만 저장됩니다.

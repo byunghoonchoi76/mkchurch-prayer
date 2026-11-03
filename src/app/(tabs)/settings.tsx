@@ -13,7 +13,7 @@ import { dataMode, repository, useAsyncData } from '@/lib/data';
 import { resetSampleData } from '@/lib/data/sample-repository';
 import { FONT_OPTIONS, MAX_PT, MIN_PT, preloadAllFonts, useFontScaleControl, type FontKey } from '@/lib/font-scale';
 import { usePrayerBgm } from '@/lib/prayer-bgm';
-import { GOAL_CONFIG, useWeeklyGoal } from '@/lib/prayer-goal';
+import { DAILY_GOAL_CONFIG, GOAL_CONFIG, useDailyGoal, useWeeklyGoal } from '@/lib/prayer-goal';
 import { goalLabel } from '@/lib/prayer-stats';
 
 export default function SettingsScreen() {
@@ -132,6 +132,8 @@ export default function SettingsScreen() {
 function GoalSettings() {
   const theme = useTheme();
   const { goal, setGoal } = useWeeklyGoal('personal');
+  const { goal: dailyGoal, setGoal: setDailyGoal } = useDailyGoal();
+  const dailyCfg = DAILY_GOAL_CONFIG;
   const cfg = GOAL_CONFIG.personal;
   const maxHours = Math.round(cfg.max / 60);
   const [open, setOpen] = useState(false);
@@ -180,6 +182,25 @@ function GoalSettings() {
             <Ionicons name="create-outline" size={14} color={theme.primary} style={{ marginLeft: 4 }} />
           </Pressable>
           <Pressable onPress={() => void setGoal(goal + cfg.step)} hitSlop={8} style={[styles.goalStep, { borderColor: theme.border }]}>
+            <Ionicons name="add" size={18} color={theme.textSecondary} />
+          </Pressable>
+        </View>
+      </Card>
+
+      <Card>
+        <ThemedText type="smallBold">하루 기도 목표</ThemedText>
+        <ThemedText type="caption" themeColor="textSecondary">
+          하루에 기도할 목표 시간이에요. 기도 중 오늘 누적이 이 시간을 넘기면 “기록하고 마칠까요?” 하고 안내해, 아멘을 깜빡해도 시간이 과하게 쌓이지 않게 해 줍니다.
+        </ThemedText>
+        <View style={styles.goalStepRow}>
+          <Pressable onPress={() => setDailyGoal(dailyGoal - dailyCfg.step)} hitSlop={8} style={[styles.goalStep, { borderColor: theme.border }]}>
+            <Ionicons name="remove" size={18} color={theme.textSecondary} />
+          </Pressable>
+          <View style={[styles.goalValueBtn, { borderColor: theme.primary, backgroundColor: theme.backgroundSelected }]}>
+            <ThemedText type="caption" themeColor="textMuted" numberOfLines={1}>목표 </ThemedText>
+            <ThemedText type="smallBold" themeColor="primary" numberOfLines={1} style={styles.flexShrink}>{goalLabel(dailyGoal)}</ThemedText>
+          </View>
+          <Pressable onPress={() => setDailyGoal(dailyGoal + dailyCfg.step)} hitSlop={8} style={[styles.goalStep, { borderColor: theme.border }]}>
             <Ionicons name="add" size={18} color={theme.textSecondary} />
           </Pressable>
         </View>
