@@ -303,6 +303,9 @@ export function useReminders() {
         icon: `${basePath()}/app-icon.png`,
         badge: `${basePath()}/app-icon.png`,
         tag: 'prayer-test',
+        renotify: true,
+        requireInteraction: true,
+        silent: false, // 소리·진동이 울리도록 명시(무음 아님)
         vibrate: [300, 150, 300, 150, 300],
       } as NotificationOptions);
       setState((s) => ({ ...s, permission }));

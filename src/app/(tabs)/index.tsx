@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, AppState, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, AppState, Modal, Platform, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HeroBanner } from '@/components/hero-banner';
@@ -556,6 +556,10 @@ function PrayerFocusModal({
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const { width: winW, height: winH } = useWindowDimensions();
+  // 기기 화면 크기에 맞춰 다이얼 크기를 조절합니다. 화면이 낮은 기기(갤럭시 플립 커버 등)·가로 모드에서도
+  // 아래 버튼(일시정지·아멘)이 잘리지 않도록, 남는 높이에 비례해 다이얼을 줄입니다. (일반 폰에서는 기존 크기)
+  const dialSize = Math.round(Math.max(150, Math.min(268, winW - 56, winH * 0.32)));
   const [pickerOpen, setPickerOpen] = useState(false);
 
   // 고른 선택에 맞는 기도제목만 모읍니다. (기도 중인 제목 먼저, 응답된 제목은 뒤)
@@ -617,7 +621,7 @@ function PrayerFocusModal({
             paddingBottom: insets.bottom + Spacing.three,
           },
         ]}>
-        <PrayerDial seconds={elapsedSeconds} display={display} paused={paused} />
+        <PrayerDial seconds={elapsedSeconds} display={display} paused={paused} size={dialSize} />
         {churchBaseSeconds != null ? (
           <View style={styles.focusChurch}>
             <Ionicons name="people" size={13} color={theme.textMuted} />
@@ -1028,7 +1032,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.pill,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  focusTopicArea: { flex: 1, justifyContent: 'center', gap: Spacing.three },
+  focusTopicArea: { flex: 1, justifyContent: 'center', gap: Spacing.three, overflow: 'hidden' },
   topicScrollWrap: { alignSelf: 'stretch' },
   topicScrollContent: { alignItems: 'center' },
   topicPage: { justifyContent: 'center', paddingHorizontal: Spacing.one },

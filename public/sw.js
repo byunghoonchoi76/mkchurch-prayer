@@ -98,6 +98,7 @@ self.addEventListener('push', (event) => {
     tag: data.tag || 'prayer-reminder',
     renotify: true,
     requireInteraction: true, // 사용자가 확인할 때까지 알림 유지
+    silent: false, // 소리·진동이 울리도록 명시(무음 아님)
     vibrate: [300, 150, 300, 150, 300], // 진동 패턴
     data: { url: data.url || './' },
   };
