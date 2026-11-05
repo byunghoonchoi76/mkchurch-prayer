@@ -7,16 +7,30 @@ import { MemberListDivider, MemberRow } from '@/components/member-row';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { Card, EmptyState, ErrorState, ListRow, LoadingState, SectionHeader } from '@/components/ui';
-import { PARISH_OPTIONS, POSITION_OPTIONS } from '@/constants/church-roles';
+import { PARISH_OPTIONS } from '@/constants/church-roles';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth';
 import { repository, useAsyncData } from '@/lib/data';
-import type { AppMember } from '@/lib/data/types';
-import { AGE_GROUP_ORDER, ageGroupOf } from '@/lib/member-stats';
+import type { AdminMemberPrayerStat, AppMember } from '@/lib/data/types';
+
+/** 초 → '1,284시간 37분' 같은 짧은 표기 (대시보드 타일·목록용) */
+function hmLabel(seconds: number): string {
+  const s = Math.max(0, Math.round(seconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (h > 0) return m ? `${h.toLocaleString('ko-KR')}시간 ${m}분` : `${h.toLocaleString('ko-KR')}시간`;
+  if (m > 0) return `${m}분`;
+  return `${s}초`;
+}
+
+function todayKey(): string {
+  const n = new Date();
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
+}
 
 /**
- * 관리자 대시보드 — 교회 관리자가 성도·공동 기도제목을 한곳에서 관리합니다.
+ * 관리자 대시보드 — 교회 관리자가 '기도 참여 현황'과 성도·공동 기도제목을 한곳에서 봅니다.
  * (설정 › 관리자 › 관리자 대시보드)
  */
 export default function AdminDashboardScreen() {
@@ -25,14 +39,15 @@ export default function AdminDashboardScreen() {
   const { user, isAdmin } = useAuth();
   const [query, setQuery] = useState('');
 
-  // 요약 수치 + 성도 명단을 함께 불러옵니다.
+  // 요약 수치 + 성도 명단 + 성도별 기도 집계를 함께 불러옵니다.
   const summary = useAsyncData(async () => {
-    const [memberCount, communal, members] = await Promise.all([
+    const [memberCount, communal, members, prayerStats] = await Promise.all([
       repository.countMembers().catch(() => 0),
       repository.listCommunalPrayers().catch(() => []),
       repository.listMembers().catch(() => [] as AppMember[]),
+      repository.getAdminPrayerStats().catch(() => [] as AdminMemberPrayerStat[]),
     ]);
-    return { memberCount, communalCount: communal.length, members };
+    return { memberCount, communalCount: communal.length, members, prayerStats };
   }, []);
 
   if (!isAdmin) {
@@ -45,18 +60,90 @@ export default function AdminDashboardScreen() {
   }
 
   const data = summary.data;
+  const stats = data?.prayerStats ?? [];
+
+  // ── 집계 ────────────────────────────────────────────────
+  const today = todayKey();
+  const todayCount = stats.filter((s) => s.todaySec > 0).length;
+  const todayTotal = stats.reduce((a, s) => a + s.todaySec, 0);
+  const weekCount = stats.filter((s) => s.weekSec > 0).length;
+  const weekTotal = stats.reduce((a, s) => a + s.weekSec, 0);
+  const allTotal = stats.reduce((a, s) => a + s.totalSec, 0);
+  const rate = data && data.memberCount > 0 ? Math.round((todayCount / data.memberCount) * 100) : 0;
+
+  const top = [...stats].filter((s) => s.totalSec > 0).sort((a, b) => b.totalSec - a.totalSec).slice(0, 5);
+
+  const rankDays = (last: string | null) => (last ? Math.round((Date.parse(today) - Date.parse(last)) / 86400000) : 99999);
+  const care = stats
+    .map((s) => ({ s, days: s.lastPrayed ? Math.round((Date.parse(today) - Date.parse(s.lastPrayed)) / 86400000) : null }))
+    .filter((x) => x.days === null || x.days >= 7)
+    .sort((a, b) => rankDays(b.s.lastPrayed) - rankDays(a.s.lastPrayed));
 
   return (
     <Screen onRefresh={summary.reload}>
       <Stack.Screen options={{ title: '관리자 대시보드' }} />
 
-      {/* 요약 ─ 가입 성도 수 · 공동 기도제목 수 */}
+      {/* ── 핵심 요약 ── */}
       <View style={styles.statRow}>
         <StatTile icon="people-outline" label="가입 성도" value={data ? `${data.memberCount}명` : '…'} />
-        <StatTile icon="megaphone-outline" label="공동 기도제목" value={data ? `${data.communalCount}개` : '…'} />
+        <StatTile icon="flame-outline" label="오늘 기도" value={data ? `${todayCount}명` : '…'} sub={data ? `참여율 ${rate}%` : undefined} />
+      </View>
+      <View style={styles.statRow}>
+        <StatTile icon="time-outline" label="오늘 기도시간" value={data ? hmLabel(todayTotal) : '…'} />
+        <StatTile icon="infinite-outline" label="누적 기도시간" value={data ? hmLabel(allTotal) : '…'} />
       </View>
 
-      {/* 교구별 성도 통계 */}
+      {/* ── 최근 7일 참여 현황 ── */}
+      <View>
+        <SectionHeader title="최근 7일 참여 현황" />
+        <Card>
+          <View style={styles.weekRow}>
+            <View style={styles.weekItem}>
+              <ThemedText type="title">{data ? `${weekCount}명` : '…'}</ThemedText>
+              <ThemedText type="caption" themeColor="textMuted" fixed>
+                기도한 성도
+              </ThemedText>
+            </View>
+            <View style={styles.weekDivider} />
+            <View style={styles.weekItem}>
+              <ThemedText type="title">{data ? hmLabel(weekTotal) : '…'}</ThemedText>
+              <ThemedText type="caption" themeColor="textMuted" fixed>
+                총 기도시간
+              </ThemedText>
+            </View>
+          </View>
+        </Card>
+      </View>
+
+      {/* ── 돌봄이 필요한 성도 (최근 7일 기도 없음) ── */}
+      <View>
+        <SectionHeader title="돌봄이 필요한 성도" />
+        {summary.loading && !data ? (
+          <LoadingState />
+        ) : care.length === 0 ? (
+          <Card>
+            <EmptyState icon="heart-outline" message="최근 7일간 모든 성도가 기도에 참여했어요." />
+          </Card>
+        ) : (
+          <CareList items={care} />
+        )}
+      </View>
+
+      {/* ── 활발한 성도 TOP ── */}
+      <View>
+        <SectionHeader title="활발한 성도 TOP" />
+        {summary.loading && !data ? (
+          <LoadingState />
+        ) : top.length === 0 ? (
+          <Card>
+            <EmptyState icon="trophy-outline" message="아직 기도 기록이 없습니다." />
+          </Card>
+        ) : (
+          <TopList items={top} />
+        )}
+      </View>
+
+      {/* ── 교구별 성도 통계 ── */}
       <View>
         <SectionHeader title="교구별 성도 통계" />
         {summary.loading && !data ? (
@@ -75,45 +162,7 @@ export default function AdminDashboardScreen() {
         )}
       </View>
 
-      {/* 직분별 성도 통계 */}
-      <View>
-        <SectionHeader title="직분별 성도 통계" />
-        {summary.loading && !data ? (
-          <LoadingState />
-        ) : !data || data.members.length === 0 ? (
-          <Card>
-            <EmptyState icon="pie-chart-outline" message="집계할 성도가 없습니다." />
-          </Card>
-        ) : (
-          <DistributionStats
-            members={data.members}
-            pick={(m) => m.position}
-            order={POSITION_OPTIONS}
-            onSelect={(value) => router.push({ pathname: '/admin/members', params: { field: 'position', value } })}
-          />
-        )}
-      </View>
-
-      {/* 연령대별 성도 통계 */}
-      <View>
-        <SectionHeader title="연령대별 성도 통계" />
-        {summary.loading && !data ? (
-          <LoadingState />
-        ) : !data || data.members.length === 0 ? (
-          <Card>
-            <EmptyState icon="pie-chart-outline" message="집계할 성도가 없습니다." />
-          </Card>
-        ) : (
-          <DistributionStats
-            members={data.members}
-            pick={(m) => ageGroupOf(m.birthDate)}
-            order={AGE_GROUP_ORDER}
-            onSelect={(value) => router.push({ pathname: '/admin/members', params: { field: 'age', value } })}
-          />
-        )}
-      </View>
-
-      {/* 콘텐츠 관리 */}
+      {/* ── 콘텐츠 관리 ── */}
       <View>
         <SectionHeader title="콘텐츠 관리" />
         <Card>
@@ -136,7 +185,7 @@ export default function AdminDashboardScreen() {
         </Card>
       </View>
 
-      {/* 성도 관리 */}
+      {/* ── 성도 관리 ── */}
       <View>
         <SectionHeader title="성도 관리" />
         {summary.loading && !data ? (
@@ -154,6 +203,66 @@ export default function AdminDashboardScreen() {
         성도 계정을 삭제하면 되돌릴 수 없습니다. 삭제 전에 한 번 더 확인해 주세요.
       </ThemedText>
     </Screen>
+  );
+}
+
+/** 돌봄이 필요한 성도 목록 — 마지막 기도일이 오래된(또는 기록 없는) 순. */
+function CareList({ items }: { items: { s: AdminMemberPrayerStat; days: number | null }[] }) {
+  const theme = useTheme();
+  const shown = items.slice(0, 12);
+  return (
+    <Card>
+      <ThemedText type="caption" themeColor="textMuted" style={styles.careHint}>
+        최근 7일간 기도 기록이 없는 성도 {items.length}명 · 심방·연락에 참고하세요
+      </ThemedText>
+      {shown.map((x, i) => (
+        <View key={x.s.userId}>
+          {i > 0 ? <MemberListDivider /> : null}
+          <View style={styles.careRow}>
+            <Ionicons name="person-circle-outline" size={22} color={theme.textMuted} />
+            <ThemedText type="small" style={styles.flex} numberOfLines={1}>
+              {x.s.name}
+            </ThemedText>
+            <ThemedText type="caption" themeColor={x.days === null ? 'danger' : 'textMuted'} fixed>
+              {x.days === null ? '기록 없음' : `${x.days}일 전`}
+            </ThemedText>
+          </View>
+        </View>
+      ))}
+      {items.length > shown.length ? (
+        <ThemedText type="caption" themeColor="textMuted" style={styles.moreHint}>
+          외 {items.length - shown.length}명
+        </ThemedText>
+      ) : null}
+    </Card>
+  );
+}
+
+/** 활발한 성도 TOP — 누적 기도시간 순 막대. */
+function TopList({ items }: { items: AdminMemberPrayerStat[] }) {
+  const theme = useTheme();
+  const max = Math.max(1, items[0]?.totalSec ?? 1);
+  return (
+    <Card>
+      {items.map((s, i) => (
+        <View key={s.userId} style={[styles.topRow, i > 0 && styles.topRowGap]}>
+          <View style={[styles.rankBadge, { backgroundColor: i === 0 ? theme.primary : theme.backgroundSelected }]}>
+            <ThemedText type="caption" fixed style={{ color: i === 0 ? theme.onPrimary : theme.textMuted, fontWeight: '800' }}>
+              {i + 1}
+            </ThemedText>
+          </View>
+          <ThemedText type="small" style={styles.topName} numberOfLines={1}>
+            {s.name}
+          </ThemedText>
+          <View style={[styles.parishTrack, { backgroundColor: theme.backgroundSelected }]}>
+            <View style={[styles.parishFill, { width: `${Math.max(6, (s.totalSec / max) * 100)}%`, backgroundColor: theme.primary }]} />
+          </View>
+          <ThemedText type="caption" themeColor="textMuted" fixed style={styles.topTime}>
+            {hmLabel(s.totalSec)}
+          </ThemedText>
+        </View>
+      ))}
+    </Card>
   );
 }
 
@@ -220,25 +329,39 @@ function MemberManager({
 }
 
 /** 상단 요약 타일. */
-function StatTile({ icon, label, value }: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; value: string }) {
+function StatTile({
+  icon,
+  label,
+  value,
+  sub,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  label: string;
+  value: string;
+  sub?: string;
+}) {
   const theme = useTheme();
   return (
     <Card style={styles.statTile}>
       <View style={[styles.statIcon, { backgroundColor: theme.backgroundSelected }]}>
         <Ionicons name={icon} size={18} color={theme.primary} />
       </View>
-      <ThemedText type="title">{value}</ThemedText>
+      <ThemedText type="title" numberOfLines={1} style={styles.center}>
+        {value}
+      </ThemedText>
       <ThemedText type="caption" themeColor="textMuted" fixed>
         {label}
       </ThemedText>
+      {sub ? (
+        <ThemedText type="caption" themeColor="primary" fixed>
+          {sub}
+        </ThemedText>
+      ) : null}
     </Card>
   );
 }
 
-/**
- * 성도 분포 막대 통계 (교구별·직분별 공통).
- * pick: 성도에서 분류 값(교구/직분)을 꺼내는 함수. order: 보여 줄 순서 목록.
- */
+/** 성도 분포 막대 통계 (교구별). pick: 분류 값을 꺼내는 함수. order: 보여 줄 순서. */
 function DistributionStats({
   members,
   pick,
@@ -248,19 +371,16 @@ function DistributionStats({
   members: AppMember[];
   pick: (m: AppMember) => string | undefined;
   order: readonly string[];
-  /** 주어지면 각 행을 누를 수 있고, 누르면 그 분류 값을 넘겨 줍니다. */
   onSelect?: (label: string) => void;
 }) {
   const theme = useTheme();
 
-  // 분류별 인원 집계 (값이 없으면 '미지정'으로)
   const counts = new Map<string, number>();
   for (const m of members) {
     const v = pick(m);
     const key = v && v.trim() ? v.trim() : '미지정';
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
-  // 정렬: 지정한 순서 → 그 밖의 값 → '미정' · '미지정'은 맨 뒤. (인원 0인 항목은 생략)
   const ordered: string[] = [];
   for (const o of order) if (o !== '미정' && counts.has(o)) ordered.push(o);
   for (const k of counts.keys()) if (!order.includes(k) && k !== '미지정' && k !== '미정') ordered.push(k);
@@ -282,21 +402,12 @@ function DistributionStats({
             key={label}
             onPress={tappable ? () => onSelect(label) : undefined}
             disabled={!tappable}
-            style={({ pressed }) => [
-              styles.parishRow,
-              i > 0 && styles.parishRowGap,
-              tappable && pressed && { opacity: 0.6 },
-            ]}>
+            style={({ pressed }) => [styles.parishRow, i > 0 && styles.parishRowGap, tappable && pressed && { opacity: 0.6 }]}>
             <ThemedText type="small" style={styles.parishLabel} numberOfLines={1}>
               {label}
             </ThemedText>
             <View style={[styles.parishTrack, { backgroundColor: theme.backgroundSelected }]}>
-              <View
-                style={[
-                  styles.parishFill,
-                  { width: `${Math.max(6, (n / max) * 100)}%`, backgroundColor: muted ? theme.textMuted : theme.primary },
-                ]}
-              />
+              <View style={[styles.parishFill, { width: `${Math.max(6, (n / max) * 100)}%`, backgroundColor: muted ? theme.textMuted : theme.primary }]} />
             </View>
             <ThemedText type="smallBold" style={styles.parishCount} fixed>
               {n}명
@@ -314,14 +425,29 @@ function DistributionStats({
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  flexShrink: { flexShrink: 1 },
   center: { alignItems: 'center', textAlign: 'center' },
-  mt4: { marginTop: 4 },
   note: { textAlign: 'center', marginTop: Spacing.one },
 
   statRow: { flexDirection: 'row', gap: Spacing.three },
   statTile: { flex: 1, alignItems: 'center', gap: Spacing.one },
   statIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.one },
+
+  // 최근 7일 참여
+  weekRow: { flexDirection: 'row', alignItems: 'center' },
+  weekItem: { flex: 1, alignItems: 'center', gap: 2 },
+  weekDivider: { width: StyleSheet.hairlineWidth, alignSelf: 'stretch', backgroundColor: 'rgba(128,128,128,0.3)' },
+
+  // 돌봄이 필요한 성도
+  careHint: { marginBottom: Spacing.two },
+  careRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, paddingVertical: Spacing.two },
+  moreHint: { marginTop: Spacing.two, textAlign: 'center' },
+
+  // 활발한 성도 TOP
+  topRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  topRowGap: { marginTop: Spacing.three },
+  rankBadge: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  topName: { width: 72 },
+  topTime: { width: 86, textAlign: 'right' },
 
   // 교구별 통계
   parishRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },

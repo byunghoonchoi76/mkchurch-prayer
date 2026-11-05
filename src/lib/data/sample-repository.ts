@@ -501,6 +501,25 @@ export const sampleRepository: ChurchRepository = {
     return CHURCH_BASELINE_SECONDS + mine + communal;
   },
 
+  async getAdminPrayerStats() {
+    await ready();
+    await delay(60);
+    // 샘플 모드: 관리자 대시보드를 미리 볼 수 있도록 보기용 가짜 통계를 돌려줍니다.
+    const d = (back: number) => {
+      const x = new Date();
+      x.setDate(x.getDate() - back);
+      return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+    };
+    return [
+      { userId: 's1', name: '김성실', totalSec: 11813, weekSec: 4200, todaySec: 1500, lastPrayed: d(0) },
+      { userId: 's2', name: '이소망', totalSec: 8600, weekSec: 2600, todaySec: 900, lastPrayed: d(0) },
+      { userId: 's3', name: '박믿음', totalSec: 5400, weekSec: 1200, todaySec: 0, lastPrayed: d(2) },
+      { userId: 's4', name: '최은혜', totalSec: 3200, weekSec: 0, todaySec: 0, lastPrayed: d(9) },
+      { userId: 's5', name: '정사랑', totalSec: 1800, weekSec: 0, todaySec: 0, lastPrayed: d(16) },
+      { userId: 's6', name: '한평강', totalSec: 0, weekSec: 0, todaySec: 0, lastPrayed: null },
+    ];
+  },
+
   // 샘플 모드는 계정이 없어 로컬(AsyncStorage)에만 저장하므로 여기선 사용되지 않습니다.
   async getMyReadingProgress() {
     return [];

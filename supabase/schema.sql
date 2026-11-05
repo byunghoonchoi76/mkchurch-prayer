@@ -658,3 +658,21 @@ returns void language sql security definer set search_path = public as $$
   delete from public.prayer_nudges where endpoint = p_endpoint;
 $$;
 grant execute on function public.prayer_nudge_clear(text) to anon, authenticated;
+
+-- ── 관리자 대시보드: 성도별 기도시간 집계 (관리자 전용) ─────────────
+create or replace function public.admin_member_prayer_stats(p_today date)
+returns table (user_id uuid, name text, total_sec bigint, week_sec bigint, today_sec bigint, last_prayed date)
+language sql security definer set search_path = public as $$
+  select
+    p.id,
+    coalesce(p.name, '성도'),
+    coalesce(sum(pt.minutes), 0)::bigint,
+    coalesce(sum(pt.minutes) filter (where pt.date >= p_today - 6), 0)::bigint,
+    coalesce(sum(pt.minutes) filter (where pt.date = p_today), 0)::bigint,
+    max(pt.date)
+  from public.profiles p
+  left join public.prayer_time pt on pt.user_id = p.id
+  where public.is_admin()
+  group by p.id, p.name;
+$$;
+grant execute on function public.admin_member_prayer_stats(date) to authenticated;

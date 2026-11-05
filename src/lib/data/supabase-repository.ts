@@ -620,6 +620,24 @@ export const supabaseRepository: ChurchRepository = {
     return ((res.data ?? []) as { total_minutes?: number }[]).reduce((s, r) => s + (r.total_minutes || 0), 0);
   },
 
+  async getAdminPrayerStats() {
+    const sb = requireSupabase();
+    // 기도 기록 날짜는 사용자 시간대 기준으로 저장되므로, '오늘'도 현지 날짜로 맞춥니다.
+    const n = new Date();
+    const today = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
+    const { data, error } = await sb.rpc('admin_member_prayer_stats', { p_today: today });
+    if (error) throw new Error(error.message);
+    type Row = { user_id: string; name: string | null; total_sec: number | string; week_sec: number | string; today_sec: number | string; last_prayed: string | null };
+    return ((data ?? []) as Row[]).map((r) => ({
+      userId: r.user_id,
+      name: r.name ?? '성도',
+      totalSec: Number(r.total_sec) || 0,
+      weekSec: Number(r.week_sec) || 0,
+      todaySec: Number(r.today_sec) || 0,
+      lastPrayed: r.last_prayed ?? null,
+    }));
+  },
+
   async getMyReadingProgress() {
     const sb = requireSupabase();
     const { data } = await sb.from('reading_plan_progress').select('done_days').maybeSingle();

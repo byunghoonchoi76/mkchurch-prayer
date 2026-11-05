@@ -296,6 +296,20 @@ export interface AppMember {
   createdAt: string;
 }
 
+/** 관리자 대시보드용 성도별 기도시간 집계 (초 단위) */
+export interface AdminMemberPrayerStat {
+  userId: string;
+  name: string;
+  /** 누적 기도시간(초) */
+  totalSec: number;
+  /** 최근 7일 기도시간(초) */
+  weekSec: number;
+  /** 오늘 기도시간(초) */
+  todaySec: number;
+  /** 마지막으로 기도한 날짜 'YYYY-MM-DD' (없으면 null) */
+  lastPrayed: string | null;
+}
+
 /** 현재 로그인 성도의 특정 소통방 소속 정보 */
 export interface MyGroupMembership {
   isMember: boolean;
@@ -406,6 +420,9 @@ export interface ChurchRepository {
 
   /** 온 성도가 함께 드린 기도시간의 합계(초). 모든 성도의 개인·공동 기도시간을 서버에서 집계합니다. */
   getChurchPrayerSeconds(): Promise<number>;
+
+  /** 관리자 대시보드: 성도별 기도시간 집계(관리자 전용). 관리자가 아니면 빈 배열. */
+  getAdminPrayerStats(): Promise<AdminMemberPrayerStat[]>;
 
   /** 맥체인 성경읽기표 진도(완료한 날 인덱스 0~364) — 계정별 */
   getMyReadingProgress(): Promise<number[]>;
