@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, AppState, Modal, Platform, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { AppState, Modal, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HeroBanner } from '@/components/hero-banner';
@@ -32,6 +32,7 @@ import { useDailyGoal, useWeeklyGoal } from '@/lib/prayer-goal';
 import { useAllPrayerTime, usePrayerTime } from '@/lib/prayer-log';
 import { clearActiveSession, loadActiveSession, saveActiveSession } from '@/lib/prayer-session';
 import { cancelPrayerNudge, schedulePrayerNudge } from '@/lib/prayer-nudge';
+import { ConfirmModal } from '@/components/confirm-modal';
 import { allTimeSeconds, goalLabel, monthSeconds, weekSeconds } from '@/lib/prayer-stats';
 
 /** 기도 시작 버튼에 쓰는 다이얼 이미지 */
@@ -269,6 +270,17 @@ function TimerCard({
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [resultSeconds, setResultSeconds] = useState<number | null>(null);
 
+  // 앱 자체 확인창. 웹의 window.confirm 은 브라우저가 사이트 주소를 붙여서, 대신 이 모달을 씁니다.
+  const [dialog, setDialog] = useState<null | {
+    title: string;
+    message?: string;
+    cancelLabel: string;
+    confirmLabel: string;
+    confirmDanger?: boolean;
+    onCancel: () => void;
+    onConfirm: () => void;
+  }>(null);
+
   // 일일 기도 목표(분) — 기도 중 오늘 누적이 이 시간을 넘기면 "기록하고 마칠까요?" 안내를 띄웁니다.
   const { goal: dailyGoal } = useDailyGoal();
 
@@ -297,16 +309,17 @@ function TimerCard({
   const confirmGoalReached = (goalMin: number) => {
     // 화면에서 직접 안내했으니, 예약해 둔 백그라운드 넛지는 중복으로 오지 않게 취소합니다.
     void cancelPrayerNudge();
-    const title = '오늘 기도 목표 달성 🙏';
-    const body = `오늘 기도 목표 ${goalMin}분을 채웠어요.\n지금까지 기도를 기록하고 마칠까요?`;
-    if (Platform.OS === 'web') {
-      if (typeof window !== 'undefined' && window.confirm(`${title}\n\n${body}`)) void stopRef.current?.();
-    } else {
-      Alert.alert(title, body, [
-        { text: '계속 기도', style: 'cancel' },
-        { text: '기록하고 마치기', onPress: () => void stopRef.current?.() },
-      ]);
-    }
+    setDialog({
+      title: '오늘 기도 목표 달성 🙏',
+      message: `오늘 기도 목표 ${goalMin}분을 채웠어요.\n지금까지 기도를 기록하고 마칠까요?`,
+      cancelLabel: '계속 기도',
+      confirmLabel: '기록하고 마치기',
+      onCancel: () => setDialog(null),
+      onConfirm: () => {
+        setDialog(null);
+        void stopRef.current?.();
+      },
+    });
   };
 
   // 개인·공동·중보 기도제목을 모두 불러와, 고른 선택에 맞게 보여 줍니다. (로그인 필요한 경우 비움)
@@ -445,28 +458,27 @@ function TimerCard({
       const m = Math.floor(s.elapsedSec / 60);
       const sec = s.elapsedSec % 60;
       const label = m > 0 ? `${m}분 ${sec}초` : `${sec}초`;
-      const title = '이어서 기록할까요?';
-      const body = `저장되지 않은 지난 기도 ${label}이 있어요.\n이 시간을 기도 기록에 더할까요?`;
       const doSave = async () => {
         await active.addMinutes(s.elapsedSec);
         onComplete?.();
       };
-      if (Platform.OS === 'web') {
-        if (typeof window !== 'undefined' && window.confirm(`${title}\n\n${body}`)) await doSave();
-        await clearActiveSession();
-      } else {
-        Alert.alert(title, body, [
-          { text: '버리기', style: 'destructive', onPress: () => void clearActiveSession() },
-          {
-            text: '기록하기',
-            onPress: () =>
-              void (async () => {
-                await doSave();
-                await clearActiveSession();
-              })(),
-          },
-        ]);
-      }
+      setDialog({
+        title: '이어서 기록할까요?',
+        message: `저장되지 않은 지난 기도 ${label}이 있어요.\n이 시간을 기도 기록에 더할까요?`,
+        cancelLabel: '버리기',
+        confirmLabel: '기록하기',
+        onCancel: () => {
+          setDialog(null);
+          void clearActiveSession();
+        },
+        onConfirm: () => {
+          setDialog(null);
+          void (async () => {
+            await doSave();
+            await clearActiveSession();
+          })();
+        },
+      });
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -518,6 +530,17 @@ function TimerCard({
       />
 
       <PrayerResultModal seconds={resultSeconds} onClose={() => setResultSeconds(null)} active={active} goal={goal} />
+
+      <ConfirmModal
+        visible={!!dialog}
+        title={dialog?.title ?? ''}
+        message={dialog?.message}
+        cancelLabel={dialog?.cancelLabel}
+        confirmLabel={dialog?.confirmLabel}
+        confirmDanger={dialog?.confirmDanger}
+        onCancel={() => (dialog ? dialog.onCancel() : setDialog(null))}
+        onConfirm={() => (dialog ? dialog.onConfirm() : setDialog(null))}
+      />
     </Card>
   );
 }

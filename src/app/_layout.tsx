@@ -31,8 +31,10 @@ function useStartupGate() {
   useEffect(() => {
     if (!ready) return;
     const onWelcome = segments[0] === 'welcome';
-    // 아직 로그인/손님을 정하지 않아도 로그인·회원가입 화면은 열 수 있어야 합니다.
-    const onAuthFlow = onWelcome || segments[0] === 'sign-in';
+    // 아직 로그인/손님을 정하지 않아도 열 수 있어야 하는 화면들.
+    // 로그인·회원가입과, 앱스토어 심사·외부 링크에서 로그인 없이 접근해야 하는 약관/방침 페이지.
+    const PUBLIC_ROUTES = ['sign-in', 'privacy', 'terms', 'email-refusal'];
+    const onAuthFlow = onWelcome || PUBLIC_ROUTES.includes(segments[0] ?? '');
     const decided = !!user || guestAck === true;
     if (!decided && !onAuthFlow) {
       router.replace('/welcome');
