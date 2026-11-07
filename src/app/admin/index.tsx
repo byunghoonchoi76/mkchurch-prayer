@@ -29,6 +29,24 @@ function todayKey(): string {
   return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
 }
 
+// 성도 명단을 한글 초성(ㄱ·ㄴ·ㄷ…)으로 묶기 위한 값들.
+const HANGUL_INITIALS = ['ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
+const TENSE_TO_BASE: Record<string, string> = { ㄲ: 'ㄱ', ㄸ: 'ㄷ', ㅃ: 'ㅂ', ㅆ: 'ㅅ', ㅉ: 'ㅈ' };
+const MEMBER_GROUP_ORDER = ['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅅ', 'ㅇ', 'ㅈ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
+
+/** 이름 첫 글자의 한글 초성(ㄱ·ㄴ·ㄷ…). 영문은 대문자, 그 외(숫자 등)는 '#'. 된소리는 기본 자음으로 묶습니다. */
+function memberInitial(name: string): string {
+  const ch = (name ?? '').trim().charAt(0);
+  if (!ch) return '#';
+  const code = ch.charCodeAt(0);
+  if (code >= 0xac00 && code <= 0xd7a3) {
+    const cho = HANGUL_INITIALS[Math.floor((code - 0xac00) / 588)];
+    return TENSE_TO_BASE[cho] ?? cho;
+  }
+  if (/[A-Za-z]/.test(ch)) return ch.toUpperCase();
+  return '#';
+}
+
 /**
  * 관리자 대시보드 — 교회 관리자가 '기도 참여 현황'과 성도·공동 기도제목을 한곳에서 봅니다.
  * (설정 › 관리자 › 관리자 대시보드)
@@ -286,6 +304,21 @@ function MemberManager({
     ? members.filter((m) => [m.name, m.parish, m.position].some((v) => (v ?? '').toLowerCase().includes(q)))
     : members;
 
+  // 이름을 가나다순으로 정렬하고 초성(ㄱ·ㄴ·ㄷ…)별로 묶습니다.
+  const sorted = [...filtered].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '', 'ko'));
+  const groups = new Map<string, AppMember[]>();
+  for (const m of sorted) {
+    const k = memberInitial(m.name);
+    const arr = groups.get(k);
+    if (arr) arr.push(m);
+    else groups.set(k, [m]);
+  }
+  const groupKeys = [
+    ...MEMBER_GROUP_ORDER.filter((k) => groups.has(k)),
+    ...[...groups.keys()].filter((k) => /^[A-Z]$/.test(k)).sort(),
+    ...(groups.has('#') ? ['#'] : []),
+  ];
+
   return (
     <View style={styles.managerGap}>
       <View style={[styles.search, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
@@ -315,14 +348,23 @@ function MemberManager({
       {filtered.length === 0 ? (
         <EmptyState icon="search-outline" message={`'${query.trim()}'에 해당하는 성도가 없습니다.`} />
       ) : (
-        <Card>
-          {filtered.map((m, i) => (
-            <View key={m.id}>
-              {i > 0 ? <MemberListDivider /> : null}
-              <MemberRow member={m} isMe={m.id === meId} onDeleted={onChanged} />
+        <View style={styles.memberGroups}>
+          {groupKeys.map((k) => (
+            <View key={k}>
+              <ThemedText type="smallBold" themeColor="textMuted" style={styles.groupHead}>
+                {k} · {groups.get(k)!.length}
+              </ThemedText>
+              <Card>
+                {groups.get(k)!.map((m, i) => (
+                  <View key={m.id}>
+                    {i > 0 ? <MemberListDivider /> : null}
+                    <MemberRow member={m} isMe={m.id === meId} onDeleted={onChanged} />
+                  </View>
+                ))}
+              </Card>
             </View>
           ))}
-        </Card>
+        </View>
       )}
     </View>
   );
@@ -460,8 +502,10 @@ const styles = StyleSheet.create({
 
   rightRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
 
-  // 성도 검색
+  // 성도 검색·초성 그룹
   managerGap: { gap: Spacing.two },
+  memberGroups: { gap: Spacing.three },
+  groupHead: { marginLeft: Spacing.one, marginBottom: Spacing.one },
   search: {
     flexDirection: 'row',
     alignItems: 'center',
