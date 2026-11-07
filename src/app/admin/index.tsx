@@ -319,6 +319,17 @@ function MemberManager({
     ...(groups.has('#') ? ['#'] : []),
   ];
 
+  // 초성 헤더를 누르면 그 그룹만 펼칩니다. 검색 중에는 전부 펼쳐 보여 줍니다.
+  const [open, setOpen] = useState<Set<string>>(new Set());
+  const toggle = (k: string) =>
+    setOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
+      return next;
+    });
+  const searching = q.length > 0;
+
   return (
     <View style={styles.managerGap}>
       <View style={[styles.search, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
@@ -349,21 +360,38 @@ function MemberManager({
         <EmptyState icon="search-outline" message={`'${query.trim()}'에 해당하는 성도가 없습니다.`} />
       ) : (
         <View style={styles.memberGroups}>
-          {groupKeys.map((k) => (
-            <View key={k}>
-              <ThemedText type="smallBold" themeColor="textMuted" style={styles.groupHead}>
-                {k} · {groups.get(k)!.length}
-              </ThemedText>
-              <Card>
-                {groups.get(k)!.map((m, i) => (
-                  <View key={m.id}>
-                    {i > 0 ? <MemberListDivider /> : null}
-                    <MemberRow member={m} isMe={m.id === meId} onDeleted={onChanged} />
-                  </View>
-                ))}
-              </Card>
-            </View>
-          ))}
+          {groupKeys.map((k) => {
+            const isOpen = searching || open.has(k);
+            return (
+              <View key={k}>
+                <Pressable
+                  onPress={() => toggle(k)}
+                  disabled={searching}
+                  style={({ pressed }) => [
+                    styles.groupHeadRow,
+                    { borderColor: theme.border, backgroundColor: theme.backgroundElement },
+                    pressed && { opacity: 0.6 },
+                  ]}>
+                  <ThemedText type="smallBold">{k}</ThemedText>
+                  <ThemedText type="caption" themeColor="textMuted" fixed>
+                    {groups.get(k)!.length}명
+                  </ThemedText>
+                  <View style={styles.flex} />
+                  {!searching ? <Ionicons name={isOpen ? 'chevron-up' : 'chevron-down'} size={16} color={theme.textMuted} /> : null}
+                </Pressable>
+                {isOpen ? (
+                  <Card style={styles.groupCard}>
+                    {groups.get(k)!.map((m, i) => (
+                      <View key={m.id}>
+                        {i > 0 ? <MemberListDivider /> : null}
+                        <MemberRow member={m} isMe={m.id === meId} onDeleted={onChanged} />
+                      </View>
+                    ))}
+                  </Card>
+                ) : null}
+              </View>
+            );
+          })}
         </View>
       )}
     </View>
@@ -504,8 +532,17 @@ const styles = StyleSheet.create({
 
   // 성도 검색·초성 그룹
   managerGap: { gap: Spacing.two },
-  memberGroups: { gap: Spacing.three },
-  groupHead: { marginLeft: Spacing.one, marginBottom: Spacing.one },
+  memberGroups: { gap: Spacing.two },
+  groupHeadRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    paddingVertical: Spacing.two + 2,
+    paddingHorizontal: Spacing.three,
+    borderRadius: Radius.medium,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  groupCard: { marginTop: Spacing.one },
   search: {
     flexDirection: 'row',
     alignItems: 'center',
