@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useFocusEffect, useGlobalSearchParams, useRouter } from 'expo-router';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { AppState, Modal, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -130,6 +130,35 @@ export default function MyPrayerScreen() {
   const active = useAllPrayerTime();
   const { goal } = useWeeklyGoal('personal');
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const params = useGlobalSearchParams<{ pray?: string | string[] }>();
+  const timerRef = useRef<TimerHandle>(null);
+  const prayProcessingRef = useRef(false);
+
+  // NFC·QR 스티커 링크(…?pray=start|amen|toggle)로 열리면, 어르신도 쉽게 쓰도록
+  // 자동으로 기도를 시작(또는 진행 중이면 아멘)합니다. 화면은 기존의 큰 기도 모드가 뜹니다.
+  useEffect(() => {
+    const raw = params.pray;
+    const action = (Array.isArray(raw) ? raw[0] : raw) ?? '';
+    if (!action) {
+      prayProcessingRef.current = false;
+      return;
+    }
+    if (prayProcessingRef.current) return;
+    prayProcessingRef.current = true;
+    const id = setTimeout(() => {
+      if (action === 'amen') timerRef.current?.amen();
+      else if (action === 'toggle') timerRef.current?.toggle();
+      else timerRef.current?.start();
+      // 처리한 파라미터를 지워 새로고침·재방문 때 중복 실행되지 않게 합니다.
+      try {
+        router.setParams({ pray: undefined as unknown as string });
+      } catch {
+        // 무시
+      }
+    }, 350);
+    return () => clearTimeout(id);
+  }, [params.pray, router]);
 
   // 온 성도가 함께 드린 기도시간(초). 서버에서는 모든 성도의 개인·공동 기도를 집계합니다.
   const churchTotal = useAsyncData(() => repository.getChurchPrayerSeconds().catch(() => 0), []);
@@ -161,7 +190,7 @@ export default function MyPrayerScreen() {
 
       {/* 큰 기도 타이머 — 남은 공간의 세로 중앙(아래 탭에 가리지 않도록 위로 올림) */}
       <View style={[styles.homeBody, { paddingBottom: insets.bottom + Spacing.two }]}>
-        <TimerCard active={active} goal={goal} churchBaseSeconds={churchSeconds} onComplete={churchTotal.reload} />
+        <TimerCard ref={timerRef} active={active} goal={goal} churchBaseSeconds={churchSeconds} onComplete={churchTotal.reload} />
         <ChurchTotalBlock seconds={churchSeconds} ready={churchTotal.data != null} />
       </View>
     </Screen>
@@ -249,17 +278,18 @@ function useCountUp(target: number, duration = 900): number {
 }
 
 // ── 큰 기도 타이머 (맨 위) ───────────────────────────────────────
-function TimerCard({
-  active,
-  goal,
-  churchBaseSeconds,
-  onComplete,
-}: {
-  active: PrayerTime;
-  goal: number;
-  churchBaseSeconds?: number;
-  onComplete?: () => void;
-}) {
+/** NFC·QR 링크로 외부에서 기도를 시작/마칠 수 있도록 노출하는 조작 핸들 */
+export type TimerHandle = { start: () => void; amen: () => void; toggle: () => void; isRunning: () => boolean };
+
+const TimerCard = forwardRef<
+  TimerHandle,
+  {
+    active: PrayerTime;
+    goal: number;
+    churchBaseSeconds?: number;
+    onComplete?: () => void;
+  }
+>(function TimerCard({ active, goal, churchBaseSeconds, onComplete }, cardRef) {
   const { user } = useAuth();
   const bgm = usePrayerBgm();
   const [running, setRunning] = useState(false);
@@ -435,6 +465,21 @@ function TimerCard({
     stopRef.current = stop;
   });
 
+  // NFC·QR 링크로 외부에서 기도를 시작/마칠 수 있게 조작 핸들을 노출합니다.
+  useImperativeHandle(cardRef, () => ({
+    start: () => {
+      if (!runningRef.current) begin();
+    },
+    amen: () => {
+      if (runningRef.current) void stop();
+    },
+    toggle: () => {
+      if (runningRef.current) void stop();
+      else begin();
+    },
+    isRunning: () => runningRef.current,
+  }));
+
   // 앱이 백그라운드로 갈 때(화면 잠금·앱 전환) 진행 상황을 저장해 둡니다.
   // 앱이 강제 종료돼도, 저장해 둔 지점까지는 다음에 복구할 수 있습니다.
   useEffect(() => {
@@ -543,7 +588,7 @@ function TimerCard({
       />
     </Card>
   );
-}
+});
 
 /** 전체 화면 기도 모드 — 큰 타이머 + 나의 기도제목을 보며 집중해서 기도합니다. */
 function PrayerFocusModal({
