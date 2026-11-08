@@ -490,6 +490,7 @@ const TimerCard = forwardRef<
 
   const recoveredRef = useRef(false); // 태그 동작이 한 번이라도 처리되면 아래 자동복구가 세션을 건드리지 않게 막는 가드
   const handledPrayRef = useRef(''); // 마지막으로 처리한 pray 토큰(같은 파라미터 중복 처리 방지)
+  const bgmResumeArmRef = useRef(false); // NFC로 시작 시, 첫 터치에 배경음악을 재생하도록 예약하는 플래그
 
   // (A) NFC·QR 태그 동작을 한곳에서 처리합니다. '진행 중 여부 + 저장된 기도'를 보고
   //     시작/아멘을 결정하므로, 시작과 아멘이 겹쳐 돌거나(타이머가 뒤에서 계속 도는) 문제가 없습니다.
@@ -525,6 +526,9 @@ const TimerCard = forwardRef<
             onComplete?.();
             await clearActiveSession();
           }
+          // NFC·QR로 '터치 없이' 시작하면 브라우저가 배경음악 자동재생을 막습니다.
+          // 첫 화면 터치에 음악을 (재)시작하도록 예약해 둡니다. (손으로 시작할 땐 불필요)
+          bgmResumeArmRef.current = true;
           begin();
         }
         // act === 'amen' 인데 저장된 기도가 없으면: 할 일 없음(그냥 홈 화면)
@@ -569,6 +573,25 @@ const TimerCard = forwardRef<
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active.loading, prayAction]);
+
+  // NFC로 터치 없이 기도가 시작되면(bgmResumeArmRef) 배경음악 자동재생이 막히므로,
+  // 기도 중 첫 화면 터치가 들어올 때 음악을 시작합니다. (손으로 시작할 땐 예약이 없어 영향 없음)
+  useEffect(() => {
+    if (!running || !bgmResumeArmRef.current) return;
+    if (!bgm.available || !bgm.enabled) return;
+    if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
+    const handler = () => {
+      bgmResumeArmRef.current = false;
+      try {
+        bgm.start();
+      } catch {
+        /* noop */
+      }
+    };
+    window.addEventListener('pointerdown', handler, { once: true });
+    return () => window.removeEventListener('pointerdown', handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [running, bgm.available, bgm.enabled]);
 
   const seconds = Math.floor(elapsed / 1000);
   const display = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
