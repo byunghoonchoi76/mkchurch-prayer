@@ -351,8 +351,14 @@ const TimerCard = forwardRef<
     [user],
   );
 
+  // NFC·QR 로 앱이 바로 열려 기도를 시작하면, 로그인 복원 직후라 기도제목이 아직 안 불러와졌을 수 있습니다.
+  // 기도 모드가 열릴 때, 그리고 로그인 사용자가 복원될 때 기도제목을 다시 불러와 화면에 채웁니다.
+  useEffect(() => {
+    if (running) topics.reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [running, user]);
+
   const begin = () => {
-    topics.reload();
     baseRef.current = 0;
     segStartRef.current = Date.now();
     startedAtRef.current = Date.now();
@@ -602,6 +608,7 @@ const TimerCard = forwardRef<
         todaySeconds={active.todayMinutes}
         churchBaseSeconds={churchBaseSeconds}
         byKind={topics.data ?? EMPTY_BY_KIND}
+        topicsLoading={topics.loading}
         selection={selection}
         onChangeSelection={setSelection}
         onStop={() => void stop()}
@@ -636,6 +643,7 @@ function PrayerFocusModal({
   todaySeconds,
   churchBaseSeconds,
   byKind,
+  topicsLoading,
   selection,
   onChangeSelection,
   onStop,
@@ -651,6 +659,7 @@ function PrayerFocusModal({
   todaySeconds: number;
   churchBaseSeconds?: number;
   byKind: TopicsByKind;
+  topicsLoading?: boolean;
   selection: TodaySelection;
   onChangeSelection: (sel: TodaySelection) => void;
   onStop: () => void;
@@ -663,7 +672,7 @@ function PrayerFocusModal({
   const { width: winW, height: winH } = useWindowDimensions();
   // 기기 화면 크기에 맞춰 다이얼 크기를 조절합니다. 화면이 낮은 기기(갤럭시 플립 커버 등)·가로 모드에서도
   // 아래 버튼(일시정지·아멘)이 잘리지 않도록, 남는 높이에 비례해 다이얼을 줄입니다. (일반 폰에서는 기존 크기)
-  const dialSize = Math.round(Math.max(150, Math.min(268, winW - 56, winH * 0.32)));
+  const dialSize = Math.round(Math.max(140, Math.min(252, winW - 72, winH * 0.29)));
   const [pickerOpen, setPickerOpen] = useState(false);
 
   // 고른 선택에 맞는 기도제목만 모읍니다. (기도 중인 제목 먼저, 응답된 제목은 뒤)
@@ -677,6 +686,9 @@ function PrayerFocusModal({
   const selectionKey = `${selection.allCategories.join(',')}|${selection.selectedIds.join(',')}`;
   const topicScrollRef = useRef<ScrollView>(null);
   const [cardW, setCardW] = useState(0);
+  // 카드 한 장의 너비. onLayout 측정값을 쓰되, (NFC로 바로 열릴 때 등) 측정이 0이면
+  // 화면 너비에서 좌우 여백을 뺀 값으로 대체해, 기도제목 카드가 항상 보이게 합니다.
+  const pageW = cardW > 0 ? cardW : Math.max(1, Math.round(winW - Spacing.four * 2));
   const posRef = useRef(0); // 현재 보이는 장(스크롤 위치 기준). 자동 넘김이 다음 장을 계산할 때 씁니다.
   const lastManualAt = useRef(0); // 마지막으로 직접 넘긴 시각. 자동 넘김 중에도 직접 넘기면 잠시(8초) 자동을 멈춰 읽을 틈을 줍니다.
   const { auto: autoAdvance, setAuto: setAutoAdvance } = useAutoAdvance(); // 자동 넘김 켜기/끄기(이 기기에 저장)
@@ -694,20 +706,20 @@ function PrayerFocusModal({
   // 일정 시간(TOPIC_ROTATE_MS)마다 다음 장으로 '스크롤'합니다. (스크롤이 현재 장을 결정 — dots/카운터도 따라옵니다.)
   // 일시정지 중이거나 사용자가 직접 넘긴 뒤에는 멈춥니다.
   useEffect(() => {
-    if (!visible || paused || !autoAdvance || count <= 1 || cardW <= 0) return;
+    if (!visible || paused || !autoAdvance || count <= 1 || pageW <= 0) return;
     const t = setInterval(() => {
       // 방금 직접 넘겼다면 이번 차례는 건너뛰어, 고른 제목을 충분히 읽을 수 있게 합니다.
       if (Date.now() - lastManualAt.current < TOPIC_ROTATE_MS) return;
       const next = (posRef.current + 1) % count;
-      topicScrollRef.current?.scrollTo({ x: next * cardW, animated: true });
+      topicScrollRef.current?.scrollTo({ x: next * pageW, animated: true });
     }, TOPIC_ROTATE_MS);
     return () => clearInterval(t);
-  }, [visible, paused, autoAdvance, count, cardW]);
+  }, [visible, paused, autoAdvance, count, pageW]);
 
   // 스크롤 위치로 현재 장을 계산해 dots·카운터(n/m)를 실시간으로 맞춥니다. (웹·앱 모두 onScroll 은 안정적으로 동작)
   const onTopicScroll = (e: { nativeEvent: { contentOffset: { x: number } } }) => {
-    if (cardW <= 0) return;
-    const idx = Math.round(e.nativeEvent.contentOffset.x / cardW);
+    if (pageW <= 0) return;
+    const idx = Math.round(e.nativeEvent.contentOffset.x / pageW);
     if (idx >= 0 && idx < count && idx !== posRef.current) {
       posRef.current = idx;
       setTopicIdx(idx);
@@ -718,12 +730,12 @@ function PrayerFocusModal({
 
   // 화살표(‹ ›)로 직접 넘깁니다. 한 번 누르면 자동 넘김은 멈춥니다. (좌우 밀기와 동일)
   const goTo = (dir: -1 | 1) => {
-    if (count <= 1 || cardW <= 0) return;
+    if (count <= 1 || pageW <= 0) return;
     lastManualAt.current = Date.now();
     const next = (posRef.current + dir + count) % count;
     posRef.current = next;
     setTopicIdx(next);
-    topicScrollRef.current?.scrollTo({ x: next * cardW, animated: true });
+    topicScrollRef.current?.scrollTo({ x: next * pageW, animated: true });
   };
 
   return (
@@ -733,8 +745,10 @@ function PrayerFocusModal({
           styles.focusRoot,
           {
             backgroundColor: theme.background,
-            paddingTop: insets.top + Spacing.three,
-            paddingBottom: insets.bottom + Spacing.three,
+            // 사파리(웹) 하단 주소창에 버튼이 가리지 않도록, 보이는 화면 높이에 맞춥니다.
+            height: winH,
+            paddingTop: insets.top + Spacing.two,
+            paddingBottom: insets.bottom + Spacing.two,
           },
         ]}>
         <PrayerDial seconds={elapsedSeconds} display={display} paused={paused} size={dialSize} />
@@ -829,7 +843,7 @@ function PrayerFocusModal({
             <>
               {/* 좌우로 밀어 기도제목을 넘겨 봅니다(한 장씩 딱 맞게 멈춤). */}
               <View style={styles.topicScrollWrap} onLayout={(e) => setCardW(Math.round(e.nativeEvent.layout.width))}>
-                {cardW > 0 ? (
+                {pageW > 0 ? (
                   <ScrollView
                     ref={topicScrollRef}
                     horizontal
@@ -842,7 +856,7 @@ function PrayerFocusModal({
                       lastManualAt.current = Date.now();
                     }}>
                     {ordered.map((t) => (
-                      <View key={t.id} style={[styles.topicPage, { width: cardW }]}>
+                      <View key={t.id} style={[styles.topicPage, { width: pageW }]}>
                         <View style={[styles.focusTopicCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
                           <View style={styles.focusTopicMeta}>
                             <View style={[styles.kindBadge, { backgroundColor: theme.primary + '18', borderColor: theme.primary + '40' }]}>
@@ -894,6 +908,13 @@ function PrayerFocusModal({
                 </View>
               ) : null}
             </>
+          ) : topicsLoading ? (
+            <View style={[styles.focusEmpty, { borderColor: theme.border }]}>
+              <Ionicons name="hourglass-outline" size={20} color={theme.textMuted} />
+              <ThemedText type="small" themeColor="textMuted" style={styles.center}>
+                기도제목을 불러오는 중…
+              </ThemedText>
+            </View>
           ) : (
             <View style={[styles.focusEmpty, { borderColor: theme.border }]}>
               <ThemedText type="small" themeColor="textMuted" style={styles.center}>
@@ -1189,14 +1210,15 @@ const styles = StyleSheet.create({
     borderRadius: Radius.pill,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  focusTopicArea: { flex: 1, justifyContent: 'center', gap: Spacing.three, overflow: 'hidden' },
+  focusTopicArea: { flex: 1, justifyContent: 'center', gap: Spacing.two, overflow: 'hidden' },
   topicScrollWrap: { alignSelf: 'stretch' },
   topicScrollContent: { alignItems: 'center' },
   topicPage: { justifyContent: 'center', paddingHorizontal: Spacing.one },
   focusTopicCard: {
     borderRadius: Radius.large,
     borderWidth: StyleSheet.hairlineWidth,
-    padding: Spacing.four,
+    paddingVertical: Spacing.three,
+    paddingHorizontal: Spacing.four,
     gap: Spacing.two,
     alignItems: 'center',
   },
