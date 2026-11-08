@@ -578,9 +578,15 @@ const TimerCard = forwardRef<
               setManualOpen(true);
             }}
             hitSlop={8}
-            style={({ pressed }) => [styles.manualLink, pressed && { opacity: 0.6 }]}>
-            <Ionicons name="create-outline" size={14} color={theme.textMuted} />
-            <ThemedText type="caption" themeColor="textMuted">시작 없이 기도했다면 시간 직접 입력</ThemedText>
+            accessibilityRole="button"
+            accessibilityLabel="시작 없이 기도한 시간 직접 입력"
+            style={({ pressed }) => [
+              styles.manualLink,
+              { borderColor: theme.primary + '55', backgroundColor: theme.primary + '12' },
+              pressed && { opacity: 0.7 },
+            ]}>
+            <Ionicons name="create-outline" size={15} color={theme.primary} />
+            <ThemedText type="smallBold" themeColor="primary">시작 없이 기도했다면 시간 직접 입력</ThemedText>
           </Pressable>
         </>
       ) : (
@@ -1166,7 +1172,18 @@ const styles = StyleSheet.create({
   center: { alignItems: 'center', textAlign: 'center' },
 
   // 기도 시간 직접 입력
-  manualLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: Spacing.one },
+  manualLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: Spacing.two,
+    alignSelf: 'center',
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    borderRadius: Radius.pill,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
   manualBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center', padding: Spacing.five },
   manualSheet: { width: '88%', maxWidth: 360, borderRadius: Radius.large, borderWidth: StyleSheet.hairlineWidth, padding: Spacing.four, gap: Spacing.two },
   manualInputRow: {
