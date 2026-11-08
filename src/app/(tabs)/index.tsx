@@ -506,19 +506,17 @@ const TimerCard = forwardRef<
     recoveredRef.current = true;
     void (async () => {
       const s = await loadActiveSession();
-      if (!s || s.elapsedSec < 30) {
-        if (s) await clearActiveSession(); // 너무 짧으면(실수 탭 등) 조용히 버립니다.
+      if (!s || s.elapsedSec <= 0) {
+        if (s) await clearActiveSession();
         return;
       }
-      const m = Math.floor(s.elapsedSec / 60);
-      const sec = s.elapsedSec % 60;
-      const label = m > 0 ? `${m}분 ${sec}초` : `${sec}초`;
       const doSave = async () => {
         await active.addMinutes(s.elapsedSec);
         onComplete?.();
       };
-      // '아멘/기도 마침' NFC·QR 태그로 다시 연 경우: 마치려는 의도가 분명하므로
-      // 묻지 않고 바로 기록하고, 마침 화면을 보여 줍니다. (어르신이 두 번 탭으로 끝낼 수 있게)
+      // '아멘/기도 마침' NFC·QR 태그(또는 toggle)로 다시 연 경우: 마치려는 의도가 분명하므로
+      // 짧은 기도라도 묻지 않고 바로 기록하고, 마침 화면을 보여 줍니다.
+      // (어르신이 "대고 → 다시 대고" 두 번으로 끝낼 수 있게. 30초 미만이어도 기록합니다.)
       if (prayAction === 'amen' || prayAction === 'toggle') {
         await doSave();
         await clearActiveSession();
@@ -526,6 +524,14 @@ const TimerCard = forwardRef<
         setResultSeconds(s.elapsedSec);
         return;
       }
+      // 파라미터 없이 다시 연 경우(아멘을 깜빡함): 너무 짧으면 실수 탭으로 보고 조용히 버립니다.
+      if (s.elapsedSec < 30) {
+        await clearActiveSession();
+        return;
+      }
+      const m = Math.floor(s.elapsedSec / 60);
+      const sec = s.elapsedSec % 60;
+      const label = m > 0 ? `${m}분 ${sec}초` : `${sec}초`;
       setDialog({
         title: '이어서 기록할까요?',
         message: `저장되지 않은 지난 기도 ${label}이 있어요.\n이 시간을 기도 기록에 더할까요?`,
