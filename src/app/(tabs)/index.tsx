@@ -188,11 +188,17 @@ export default function MyPrayerScreen() {
         <ThemedText style={styles.heroSubtitle}>오늘도 기도로 하루를 밝혀요 · 시편 27:1</ThemedText>
       </HeroBanner>
 
-      {/* 큰 기도 타이머 — 남은 공간의 세로 중앙(아래 탭에 가리지 않도록 위로 올림) */}
-      <View style={[styles.homeBody, { paddingBottom: insets.bottom + Spacing.two }]}>
-        <TimerCard ref={timerRef} active={active} goal={goal} churchBaseSeconds={churchSeconds} onComplete={churchTotal.reload} />
-        <ChurchTotalBlock seconds={churchSeconds} ready={churchTotal.data != null} />
-      </View>
+      {/* 큰 기도 타이머 — 공간이 넉넉하면 세로 중앙에, 작은 화면(플립·소형폰)에서는
+          스크롤되어 아래 '온 성도가 함께' 블록이 탭에 가려 잘리지 않도록 합니다. */}
+      <ScrollView
+        style={styles.flex}
+        contentContainerStyle={styles.homeScrollContent}
+        showsVerticalScrollIndicator={false}>
+        <View style={[styles.homeBody, { paddingBottom: insets.bottom + Spacing.two }]}>
+          <TimerCard ref={timerRef} active={active} goal={goal} churchBaseSeconds={churchSeconds} onComplete={churchTotal.reload} />
+          <ChurchTotalBlock seconds={churchSeconds} ready={churchTotal.data != null} />
+        </View>
+      </ScrollView>
     </Screen>
   );
 }
@@ -1202,7 +1208,8 @@ const styles = StyleSheet.create({
 
   // 기도하기 홈 — 상단 배너 + 남은 공간에 다이얼 중앙, 안내 문구는 왼쪽 맞춤
   home: { gap: Spacing.three },
-  homeBody: { flex: 1, justifyContent: 'center', gap: Spacing.three },
+  homeScrollContent: { flexGrow: 1 },
+  homeBody: { flexGrow: 1, justifyContent: 'center', gap: Spacing.three },
   heroTitle: {
     color: '#fff',
     fontSize: 22,
