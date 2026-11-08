@@ -161,6 +161,20 @@ export default function AdminDashboardScreen() {
         )}
       </View>
 
+      {/* ── 교구별 기도시간 현황 ── */}
+      <View>
+        <SectionHeader title="교구별 기도시간 현황" />
+        {summary.loading && !data ? (
+          <LoadingState />
+        ) : !data || stats.length === 0 ? (
+          <Card>
+            <EmptyState icon="time-outline" message="아직 기도 기록이 없습니다." />
+          </Card>
+        ) : (
+          <ParishPrayerStats members={data.members} stats={stats} />
+        )}
+      </View>
+
       {/* ── 교구별 성도 통계 ── */}
       <View>
         <SectionHeader title="교구별 성도 통계" />
@@ -280,6 +294,67 @@ function TopList({ items }: { items: AdminMemberPrayerStat[] }) {
           </ThemedText>
         </View>
       ))}
+    </Card>
+  );
+}
+
+/** 교구별 기도시간 현황 — 성도별 집계를 교구로 모아 누적 기도시간 순으로 보여 줍니다. */
+function ParishPrayerStats({ members, stats }: { members: AppMember[]; stats: AdminMemberPrayerStat[] }) {
+  const theme = useTheme();
+
+  // 성도 id → 교구. 교구가 없으면 '미지정'.
+  const parishOf = new Map(members.map((m) => [m.id, m.parish && m.parish.trim() ? m.parish.trim() : '미지정']));
+  const agg = new Map<string, { total: number; week: number; prayed: number }>();
+  for (const s of stats) {
+    const p = parishOf.get(s.userId) ?? '미지정';
+    const cur = agg.get(p) ?? { total: 0, week: 0, prayed: 0 };
+    cur.total += s.totalSec;
+    cur.week += s.weekSec;
+    if (s.totalSec > 0) cur.prayed += 1;
+    agg.set(p, cur);
+  }
+
+  const rows = [...agg.entries()].map(([parish, v]) => ({ parish, ...v }));
+  // 누적 기도시간이 많은 교구부터. '미지정'·'미정'은 맨 뒤로.
+  rows.sort((a, b) => {
+    const au = a.parish === '미지정' || a.parish === '미정';
+    const bu = b.parish === '미지정' || b.parish === '미정';
+    if (au !== bu) return au ? 1 : -1;
+    return b.total - a.total;
+  });
+
+  if (rows.length === 0) {
+    return (
+      <Card>
+        <EmptyState icon="time-outline" message="아직 기도 기록이 없습니다." />
+      </Card>
+    );
+  }
+
+  const max = Math.max(1, ...rows.map((r) => r.total));
+  return (
+    <Card>
+      {rows.map((r, i) => {
+        const muted = r.parish === '미지정' || r.parish === '미정';
+        return (
+          <View key={r.parish} style={i > 0 ? styles.parishRowGap : undefined}>
+            <View style={styles.parishRow}>
+              <ThemedText type="small" style={styles.parishLabel} numberOfLines={1}>
+                {r.parish}
+              </ThemedText>
+              <View style={[styles.parishTrack, { backgroundColor: theme.backgroundSelected }]}>
+                <View style={[styles.parishFill, { width: `${Math.max(6, (r.total / max) * 100)}%`, backgroundColor: muted ? theme.textMuted : theme.primary }]} />
+              </View>
+              <ThemedText type="caption" themeColor="textMuted" fixed style={styles.topTime}>
+                {hmLabel(r.total)}
+              </ThemedText>
+            </View>
+            <ThemedText type="caption" themeColor="textMuted" style={styles.parishPraySub} fixed>
+              최근 7일 {hmLabel(r.week)} · {r.prayed}명 기도
+            </ThemedText>
+          </View>
+        );
+      })}
     </Card>
   );
 }
@@ -527,6 +602,7 @@ const styles = StyleSheet.create({
   parishFill: { height: 10, borderRadius: 5 },
   parishCount: { width: 40, textAlign: 'right' },
   parishPct: { width: 36, textAlign: 'right' },
+  parishPraySub: { marginTop: 3, marginLeft: 52 + Spacing.two },
 
   rightRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
 

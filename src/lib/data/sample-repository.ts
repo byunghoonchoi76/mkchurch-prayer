@@ -510,13 +510,14 @@ export const sampleRepository: ChurchRepository = {
       x.setDate(x.getDate() - back);
       return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
     };
+    // 실제 성도(u-1…u-6)에 맞춰 집계합니다. 교구별 집계 데모가 되도록 userId를 명단과 일치시킵니다.
     return [
-      { userId: 's1', name: '김성실', totalSec: 11813, weekSec: 4200, todaySec: 1500, lastPrayed: d(0) },
-      { userId: 's2', name: '이소망', totalSec: 8600, weekSec: 2600, todaySec: 900, lastPrayed: d(0) },
-      { userId: 's3', name: '박믿음', totalSec: 5400, weekSec: 1200, todaySec: 0, lastPrayed: d(2) },
-      { userId: 's4', name: '최은혜', totalSec: 3200, weekSec: 0, todaySec: 0, lastPrayed: d(9) },
-      { userId: 's5', name: '정사랑', totalSec: 1800, weekSec: 0, todaySec: 0, lastPrayed: d(16) },
-      { userId: 's6', name: '한평강', totalSec: 0, weekSec: 0, todaySec: 0, lastPrayed: null },
+      { userId: 'u-1', name: '김다인', totalSec: 11813, weekSec: 4200, todaySec: 1500, lastPrayed: d(0) },
+      { userId: 'u-2', name: '이서준', totalSec: 8600, weekSec: 2600, todaySec: 900, lastPrayed: d(0) },
+      { userId: 'u-3', name: '박은혜', totalSec: 5400, weekSec: 1200, todaySec: 0, lastPrayed: d(2) },
+      { userId: 'u-4', name: '최민수', totalSec: 3200, weekSec: 0, todaySec: 0, lastPrayed: d(9) },
+      { userId: 'u-5', name: '정하윤', totalSec: 1800, weekSec: 0, todaySec: 0, lastPrayed: d(16) },
+      { userId: 'u-6', name: '한지훈', totalSec: 0, weekSec: 0, todaySec: 0, lastPrayed: null },
     ];
   },
 
