@@ -132,6 +132,7 @@ export default function MyPrayerScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const params = useGlobalSearchParams<{ pray?: string | string[] }>();
+  const prayAction = (Array.isArray(params.pray) ? params.pray[0] : params.pray) ?? '';
   const timerRef = useRef<TimerHandle>(null);
   const prayProcessingRef = useRef(false);
 
@@ -195,7 +196,7 @@ export default function MyPrayerScreen() {
         contentContainerStyle={styles.homeScrollContent}
         showsVerticalScrollIndicator={false}>
         <View style={[styles.homeBody, { paddingBottom: insets.bottom + Spacing.two }]}>
-          <TimerCard ref={timerRef} active={active} goal={goal} churchBaseSeconds={churchSeconds} onComplete={churchTotal.reload} />
+          <TimerCard ref={timerRef} active={active} goal={goal} churchBaseSeconds={churchSeconds} onComplete={churchTotal.reload} prayAction={prayAction} />
           <ChurchTotalBlock seconds={churchSeconds} ready={churchTotal.data != null} />
         </View>
       </ScrollView>
@@ -294,8 +295,10 @@ const TimerCard = forwardRef<
     goal: number;
     churchBaseSeconds?: number;
     onComplete?: () => void;
+    /** NFC·QR 링크로 열렸을 때의 동작(start|amen|toggle). 복구 처리에서 '아멘' 의도를 구분합니다. */
+    prayAction?: string;
   }
->(function TimerCard({ active, goal, churchBaseSeconds, onComplete }, cardRef) {
+>(function TimerCard({ active, goal, churchBaseSeconds, onComplete, prayAction }, cardRef) {
   const { user } = useAuth();
   const bgm = usePrayerBgm();
   const [running, setRunning] = useState(false);
@@ -499,6 +502,7 @@ const TimerCard = forwardRef<
   const recoveredRef = useRef(false);
   useEffect(() => {
     if (recoveredRef.current) return;
+    if (active.loading) return; // 기록 데이터가 준비된 뒤에 복구를 처리합니다(기록 누락 방지).
     recoveredRef.current = true;
     void (async () => {
       const s = await loadActiveSession();
@@ -513,6 +517,15 @@ const TimerCard = forwardRef<
         await active.addMinutes(s.elapsedSec);
         onComplete?.();
       };
+      // '아멘/기도 마침' NFC·QR 태그로 다시 연 경우: 마치려는 의도가 분명하므로
+      // 묻지 않고 바로 기록하고, 마침 화면을 보여 줍니다. (어르신이 두 번 탭으로 끝낼 수 있게)
+      if (prayAction === 'amen' || prayAction === 'toggle') {
+        await doSave();
+        await clearActiveSession();
+        active.reload(); // 결과 화면의 누적 수치가 방금 기록을 반영하도록 새로고침
+        setResultSeconds(s.elapsedSec);
+        return;
+      }
       setDialog({
         title: '이어서 기록할까요?',
         message: `저장되지 않은 지난 기도 ${label}이 있어요.\n이 시간을 기도 기록에 더할까요?`,
@@ -532,7 +545,7 @@ const TimerCard = forwardRef<
       });
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [active.loading]);
 
   const seconds = Math.floor(elapsed / 1000);
   const display = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
