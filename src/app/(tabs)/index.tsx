@@ -132,34 +132,16 @@ export default function MyPrayerScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const params = useGlobalSearchParams<{ pray?: string | string[] }>();
+  // NFC·QR 스티커 링크(…?pray=start|amen|toggle)로 열렸을 때의 동작. 실제 처리는 TimerCard 가
+  // '진행 중 여부 + 저장된 기도'를 보고 한곳에서 결정합니다(시작/아멘이 겹쳐 돌지 않도록).
   const prayAction = (Array.isArray(params.pray) ? params.pray[0] : params.pray) ?? '';
-  const timerRef = useRef<TimerHandle>(null);
-  const prayProcessingRef = useRef(false);
-
-  // NFC·QR 스티커 링크(…?pray=start|amen|toggle)로 열리면, 어르신도 쉽게 쓰도록
-  // 자동으로 기도를 시작(또는 진행 중이면 아멘)합니다. 화면은 기존의 큰 기도 모드가 뜹니다.
-  useEffect(() => {
-    const raw = params.pray;
-    const action = (Array.isArray(raw) ? raw[0] : raw) ?? '';
-    if (!action) {
-      prayProcessingRef.current = false;
-      return;
+  const consumePray = useCallback(() => {
+    try {
+      router.setParams({ pray: undefined as unknown as string });
+    } catch {
+      // 무시
     }
-    if (prayProcessingRef.current) return;
-    prayProcessingRef.current = true;
-    const id = setTimeout(() => {
-      if (action === 'amen') timerRef.current?.amen();
-      else if (action === 'toggle') timerRef.current?.toggle();
-      else timerRef.current?.start();
-      // 처리한 파라미터를 지워 새로고침·재방문 때 중복 실행되지 않게 합니다.
-      try {
-        router.setParams({ pray: undefined as unknown as string });
-      } catch {
-        // 무시
-      }
-    }, 350);
-    return () => clearTimeout(id);
-  }, [params.pray, router]);
+  }, [router]);
 
   // 온 성도가 함께 드린 기도시간(초). 서버에서는 모든 성도의 개인·공동 기도를 집계합니다.
   const churchTotal = useAsyncData(() => repository.getChurchPrayerSeconds().catch(() => 0), []);
@@ -196,7 +178,7 @@ export default function MyPrayerScreen() {
         contentContainerStyle={styles.homeScrollContent}
         showsVerticalScrollIndicator={false}>
         <View style={[styles.homeBody, { paddingBottom: insets.bottom + Spacing.two }]}>
-          <TimerCard ref={timerRef} active={active} goal={goal} churchBaseSeconds={churchSeconds} onComplete={churchTotal.reload} prayAction={prayAction} />
+          <TimerCard active={active} goal={goal} churchBaseSeconds={churchSeconds} onComplete={churchTotal.reload} prayAction={prayAction} onConsumePray={consumePray} />
           <ChurchTotalBlock seconds={churchSeconds} ready={churchTotal.data != null} />
         </View>
       </ScrollView>
@@ -295,10 +277,12 @@ const TimerCard = forwardRef<
     goal: number;
     churchBaseSeconds?: number;
     onComplete?: () => void;
-    /** NFC·QR 링크로 열렸을 때의 동작(start|amen|toggle). 복구 처리에서 '아멘' 의도를 구분합니다. */
+    /** NFC·QR 링크로 열렸을 때의 동작(start|amen|toggle). TimerCard 가 진행 상태를 보고 처리합니다. */
     prayAction?: string;
+    /** 위 동작을 처리한 뒤 URL 의 pray 파라미터를 지우는 콜백(재실행 방지). */
+    onConsumePray?: () => void;
   }
->(function TimerCard({ active, goal, churchBaseSeconds, onComplete, prayAction }, cardRef) {
+>(function TimerCard({ active, goal, churchBaseSeconds, onComplete, prayAction, onConsumePray }, cardRef) {
   const { user } = useAuth();
   const bgm = usePrayerBgm();
   const [running, setRunning] = useState(false);
@@ -498,35 +482,61 @@ const TimerCard = forwardRef<
     return () => sub.remove();
   }, [persist]);
 
-  // 앱을 다시 켰을 때, 저장되지 않은 지난 기도가 남아 있으면 "이어서 기록할까요?"를 안내합니다.
-  const recoveredRef = useRef(false);
+  const recoveredRef = useRef(false); // 태그 동작이 한 번이라도 처리되면 아래 자동복구가 세션을 건드리지 않게 막는 가드
+  const handledPrayRef = useRef(''); // 마지막으로 처리한 pray 토큰(같은 파라미터 중복 처리 방지)
+
+  // (A) NFC·QR 태그 동작을 한곳에서 처리합니다. '진행 중 여부 + 저장된 기도'를 보고
+  //     시작/아멘을 결정하므로, 시작과 아멘이 겹쳐 돌거나(타이머가 뒤에서 계속 도는) 문제가 없습니다.
+  useEffect(() => {
+    if (active.loading) return; // 기록 데이터가 준비된 뒤에 처리
+    const act = prayAction;
+    if (!act) {
+      handledPrayRef.current = ''; // 파라미터가 비면 리셋 → 다음 태깅을 받을 수 있게
+      return;
+    }
+    if (handledPrayRef.current === act) return; // 같은 파라미터 중복 처리 방지
+    handledPrayRef.current = act;
+    recoveredRef.current = true; // 태그로 처리했으니 자동복구(아래)는 건너뜀
+    void (async () => {
+      if (runningRef.current) {
+        // 이미 기도 중(앱이 열려 있던 경우): 아멘/toggle → 마침, start → 무시
+        if (act === 'amen' || act === 'toggle') await stop();
+      } else {
+        // 새로 열린 경우: 저장된 기도가 있으면 '마침(기록)', 없으면 '시작'
+        const s = await loadActiveSession();
+        const pending = s && s.elapsedSec > 0 ? s : null;
+        if ((act === 'amen' || act === 'toggle') && pending) {
+          // 마침(기록) + 마침 화면. 새 기도를 시작하지 않습니다(뒤에서 타이머가 도는 문제 방지).
+          await active.addMinutes(pending.elapsedSec);
+          onComplete?.();
+          await clearActiveSession();
+          active.reload();
+          setResultSeconds(pending.elapsedSec);
+        } else if (act === 'start' || act === 'toggle') {
+          // 새 기도 시작. 혹시 저장된 지난 기도가 있으면 조용히 먼저 기록해 시간 손실을 막습니다.
+          if (pending) {
+            await active.addMinutes(pending.elapsedSec);
+            onComplete?.();
+            await clearActiveSession();
+          }
+          begin();
+        }
+        // act === 'amen' 인데 저장된 기도가 없으면: 할 일 없음(그냥 홈 화면)
+      }
+      onConsumePray?.(); // 처리한 파라미터를 지워 새로고침·재방문 때 중복 실행되지 않게 합니다.
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prayAction, active.loading]);
+
+  // (B) 태그 없이 앱을 다시 켰을 때(아멘을 깜빡함), 저장된 지난 기도가 있으면 "이어서 기록할까요?"를 안내.
   useEffect(() => {
     if (recoveredRef.current) return;
-    if (active.loading) return; // 기록 데이터가 준비된 뒤에 복구를 처리합니다(기록 누락 방지).
+    if (active.loading || prayAction) return; // 태그로 열린 경우는 (A)가 처리
     recoveredRef.current = true;
     void (async () => {
       const s = await loadActiveSession();
-      if (!s || s.elapsedSec <= 0) {
-        if (s) await clearActiveSession();
-        return;
-      }
-      const doSave = async () => {
-        await active.addMinutes(s.elapsedSec);
-        onComplete?.();
-      };
-      // '아멘/기도 마침' NFC·QR 태그(또는 toggle)로 다시 연 경우: 마치려는 의도가 분명하므로
-      // 짧은 기도라도 묻지 않고 바로 기록하고, 마침 화면을 보여 줍니다.
-      // (어르신이 "대고 → 다시 대고" 두 번으로 끝낼 수 있게. 30초 미만이어도 기록합니다.)
-      if (prayAction === 'amen' || prayAction === 'toggle') {
-        await doSave();
-        await clearActiveSession();
-        active.reload(); // 결과 화면의 누적 수치가 방금 기록을 반영하도록 새로고침
-        setResultSeconds(s.elapsedSec);
-        return;
-      }
-      // 파라미터 없이 다시 연 경우(아멘을 깜빡함): 너무 짧으면 실수 탭으로 보고 조용히 버립니다.
-      if (s.elapsedSec < 30) {
-        await clearActiveSession();
+      if (!s || s.elapsedSec < 30) {
+        if (s) await clearActiveSession(); // 너무 짧으면(실수 탭 등) 조용히 버립니다.
         return;
       }
       const m = Math.floor(s.elapsedSec / 60);
@@ -544,14 +554,15 @@ const TimerCard = forwardRef<
         onConfirm: () => {
           setDialog(null);
           void (async () => {
-            await doSave();
+            await active.addMinutes(s.elapsedSec);
+            onComplete?.();
             await clearActiveSession();
           })();
         },
       });
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active.loading]);
+  }, [active.loading, prayAction]);
 
   const seconds = Math.floor(elapsed / 1000);
   const display = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
