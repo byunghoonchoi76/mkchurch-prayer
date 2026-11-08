@@ -102,6 +102,37 @@ export function useDailyGoal() {
   return { goal, setGoal, loading };
 }
 
+// ── 기도제목 자동 넘김 설정 ──────────────────────────────────────
+// 기도 모드에서 기도제목 카드를 8초마다 자동으로 넘길지(켜기), 화살표·밀기로만 직접 넘길지(끄기)
+// 선택합니다. 이 기기에 저장됩니다(개인용, 기본값: 켜기).
+const AUTO_ADVANCE_KEY = 'church-app/prayer-auto-advance';
+
+export function useAutoAdvance() {
+  const [auto, setAutoState] = useState(true);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    AsyncStorage.getItem(AUTO_ADVANCE_KEY)
+      .then((v) => {
+        if (!active) return;
+        if (v === 'off') setAutoState(false);
+      })
+      .catch(() => {})
+      .finally(() => active && setLoading(false));
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const setAuto = useCallback((next: boolean) => {
+    setAutoState(next);
+    void AsyncStorage.setItem(AUTO_ADVANCE_KEY, next ? 'on' : 'off').catch(() => {});
+  }, []);
+
+  return { auto, setAuto, loading };
+}
+
 // ── 공동 기도 목표 (교회 공통값) ─────────────────────────────────
 // 서버(app_settings.communal_goal_minutes)에 저장되어 관리자가 바꾸면 모든 성도에게 반영됩니다.
 // Supabase 미연결(샘플 모드)에서는 이 기기에만 저장됩니다.

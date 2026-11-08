@@ -28,7 +28,7 @@ import {
   type TodayPrayerKind,
   type TodaySelection,
 } from '@/lib/today-prayer';
-import { useDailyGoal, useWeeklyGoal } from '@/lib/prayer-goal';
+import { useAutoAdvance, useDailyGoal, useWeeklyGoal } from '@/lib/prayer-goal';
 import { useAllPrayerTime, usePrayerTime } from '@/lib/prayer-log';
 import { clearActiveSession, loadActiveSession, saveActiveSession } from '@/lib/prayer-session';
 import { cancelPrayerNudge, schedulePrayerNudge } from '@/lib/prayer-nudge';
@@ -714,12 +714,13 @@ function PrayerFocusModal({
   const topicScrollRef = useRef<ScrollView>(null);
   const [cardW, setCardW] = useState(0);
   const posRef = useRef(0); // 현재 보이는 장(스크롤 위치 기준). 자동 넘김이 다음 장을 계산할 때 씁니다.
-  const manualRef = useRef(false); // 사용자가 한 번이라도 직접 넘기면 자동 넘김을 멈춥니다.
+  const lastManualAt = useRef(0); // 마지막으로 직접 넘긴 시각. 자동 넘김 중에도 직접 넘기면 잠시(8초) 자동을 멈춰 읽을 틈을 줍니다.
+  const { auto: autoAdvance, setAuto: setAutoAdvance } = useAutoAdvance(); // 자동 넘김 켜기/끄기(이 기기에 저장)
 
   // 기도 모드가 열릴 때, 또 선택을 바꿀 때 처음 제목부터 시작합니다.
   useEffect(() => {
     if (visible) {
-      manualRef.current = false;
+      lastManualAt.current = 0;
       posRef.current = 0;
       setTopicIdx(0);
       topicScrollRef.current?.scrollTo({ x: 0, animated: false });
@@ -729,14 +730,15 @@ function PrayerFocusModal({
   // 일정 시간(TOPIC_ROTATE_MS)마다 다음 장으로 '스크롤'합니다. (스크롤이 현재 장을 결정 — dots/카운터도 따라옵니다.)
   // 일시정지 중이거나 사용자가 직접 넘긴 뒤에는 멈춥니다.
   useEffect(() => {
-    if (!visible || paused || count <= 1 || cardW <= 0) return;
+    if (!visible || paused || !autoAdvance || count <= 1 || cardW <= 0) return;
     const t = setInterval(() => {
-      if (manualRef.current) return;
+      // 방금 직접 넘겼다면 이번 차례는 건너뛰어, 고른 제목을 충분히 읽을 수 있게 합니다.
+      if (Date.now() - lastManualAt.current < TOPIC_ROTATE_MS) return;
       const next = (posRef.current + 1) % count;
       topicScrollRef.current?.scrollTo({ x: next * cardW, animated: true });
     }, TOPIC_ROTATE_MS);
     return () => clearInterval(t);
-  }, [visible, paused, count, cardW]);
+  }, [visible, paused, autoAdvance, count, cardW]);
 
   // 스크롤 위치로 현재 장을 계산해 dots·카운터(n/m)를 실시간으로 맞춥니다. (웹·앱 모두 onScroll 은 안정적으로 동작)
   const onTopicScroll = (e: { nativeEvent: { contentOffset: { x: number } } }) => {
@@ -753,7 +755,7 @@ function PrayerFocusModal({
   // 화살표(‹ ›)로 직접 넘깁니다. 한 번 누르면 자동 넘김은 멈춥니다. (좌우 밀기와 동일)
   const goTo = (dir: -1 | 1) => {
     if (count <= 1 || cardW <= 0) return;
-    manualRef.current = true;
+    lastManualAt.current = Date.now();
     const next = (posRef.current + dir + count) % count;
     posRef.current = next;
     setTopicIdx(next);
@@ -822,6 +824,28 @@ function PrayerFocusModal({
             </ThemedText>
           ) : null}
           <View style={styles.flex} />
+          {/* 자동 넘김(8초마다) ↔ 수동 넘김(화살표·밀기) 선택. 이 기기에 저장됩니다. */}
+          {count > 1 ? (
+            <Pressable
+              onPress={() => setAutoAdvance(!autoAdvance)}
+              hitSlop={8}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: autoAdvance }}
+              accessibilityLabel={autoAdvance ? '자동 넘김 켜짐, 끄려면 누르세요' : '자동 넘김 꺼짐, 켜려면 누르세요'}
+              style={({ pressed }) => [
+                styles.pickBtn,
+                {
+                  borderColor: autoAdvance ? theme.primary + '55' : theme.border,
+                  backgroundColor: autoAdvance ? theme.primary + '14' : 'transparent',
+                  opacity: pressed ? 0.7 : 1,
+                },
+              ]}>
+              <Ionicons name={autoAdvance ? 'sync' : 'hand-left-outline'} size={14} color={autoAdvance ? theme.primary : theme.textMuted} />
+              <ThemedText type="caption" themeColor={autoAdvance ? 'primary' : 'textMuted'} fixed numberOfLines={1}>
+                {autoAdvance ? '자동' : '수동'}
+              </ThemedText>
+            </Pressable>
+          ) : null}
           {/* 개인·공동·중보 카테고리 전체, 또는 원하는 기도제목만 골라요. (선택은 저장돼 유지) */}
           <Pressable
             onPress={() => setPickerOpen(true)}
@@ -851,7 +875,7 @@ function PrayerFocusModal({
                     scrollEventThrottle={16}
                     onScroll={onTopicScroll}
                     onScrollBeginDrag={() => {
-                      manualRef.current = true;
+                      lastManualAt.current = Date.now();
                     }}>
                     {ordered.map((t) => (
                       <View key={t.id} style={[styles.topicPage, { width: cardW }]}>
@@ -1201,7 +1225,7 @@ const styles = StyleSheet.create({
   bgmRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, paddingVertical: Spacing.one },
   bgmTrack: { width: 46, height: 28, borderRadius: 14, padding: 3, justifyContent: 'center' },
   bgmThumb: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#fff' },
-  focusTopicsHead: { flexDirection: 'row', alignItems: 'center', gap: Spacing.one, marginTop: Spacing.two },
+  focusTopicsHead: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: Spacing.one, rowGap: Spacing.one, marginTop: Spacing.two },
   pickBtn: {
     flexDirection: 'row',
     alignItems: 'center',
