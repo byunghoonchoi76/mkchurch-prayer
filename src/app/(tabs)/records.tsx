@@ -1,12 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
+import { ConfirmModal } from '@/components/confirm-modal';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
-import { Card, ListRow, SectionHeader } from '@/components/ui';
+import { Button, Card, ListRow, SectionHeader } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { durationLabel, toDateKey } from '@/lib/format';
@@ -21,8 +22,37 @@ type PrayerTime = ReturnType<typeof usePrayerTime>;
 /** 기도 기록 — 이번 주 달성률 · 기도 달력 · 최근 평균 · 상세 통계 */
 export default function PrayerRecordsScreen() {
   const router = useRouter();
+  const theme = useTheme();
   const active = useAllPrayerTime();
   const { goal } = useWeeklyGoal('personal');
+
+  // 시작 버튼 없이 기도한 경우, 오늘 기도 시간을 분 단위로 직접 기록합니다.
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualText, setManualText] = useState('');
+  const [manualErr, setManualErr] = useState<string | undefined>();
+  const [savedMin, setSavedMin] = useState<number | null>(null);
+
+  const openManual = () => {
+    setManualText('');
+    setManualErr(undefined);
+    setManualOpen(true);
+  };
+
+  const saveManual = async () => {
+    const mins = parseInt(manualText.replace(/[^0-9]/g, ''), 10);
+    if (!Number.isFinite(mins) || mins <= 0) {
+      setManualErr('기도한 시간을 분 단위 숫자로 입력해 주세요.');
+      return;
+    }
+    if (mins > 1440) {
+      setManualErr('하루 최대 1440분(24시간)까지 입력할 수 있어요.');
+      return;
+    }
+    setManualOpen(false);
+    await active.addMinutes(mins * 60); // 분 → 초
+    active.reload();
+    setSavedMin(mins);
+  };
 
   return (
     <Screen onRefresh={active.reload}>
@@ -32,12 +62,69 @@ export default function PrayerRecordsScreen() {
 
       <Card>
         <ListRow
+          icon="create-outline"
+          title="기도 시간 직접 입력"
+          subtitle="시작 버튼 없이 기도했다면 오늘 시간을 기록해요"
+          onPress={openManual}
+        />
+        <View style={[styles.rowDivider, { backgroundColor: theme.border }]} />
+        <ListRow
           icon="stats-chart-outline"
           title="기도 통계"
           subtitle="기도제목 상태·응답률·분류별 분포를 한눈에"
           onPress={() => router.push('/prayer/stats')}
         />
       </Card>
+
+      {/* 시작 버튼 없이 기도한 경우 시간 직접 입력 */}
+      <Modal visible={manualOpen} transparent animationType="fade" onRequestClose={() => setManualOpen(false)}>
+        <Pressable style={styles.manualBackdrop} onPress={() => setManualOpen(false)}>
+          <Pressable style={[styles.manualSheet, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => {}}>
+            <ThemedText type="subtitle" style={styles.center}>
+              기도 시간 직접 입력
+            </ThemedText>
+            <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
+              시작 버튼 없이 기도하셨다면,{'\n'}오늘 기도한 시간을 분 단위로 입력하세요.
+            </ThemedText>
+            <View style={[styles.manualInputRow, { borderColor: theme.border, backgroundColor: theme.backgroundElement }]}>
+              <TextInput
+                value={manualText}
+                onChangeText={(t) => {
+                  setManualText(t);
+                  setManualErr(undefined);
+                }}
+                keyboardType="number-pad"
+                placeholder="0"
+                placeholderTextColor={theme.textMuted}
+                style={[styles.manualInput, { color: theme.text }]}
+                autoFocus
+              />
+              <ThemedText type="subtitle" themeColor="textSecondary">
+                분
+              </ThemedText>
+            </View>
+            {manualErr ? (
+              <ThemedText type="caption" themeColor="danger" style={styles.center}>
+                {manualErr}
+              </ThemedText>
+            ) : null}
+            <View style={styles.manualBtnRow}>
+              <Button label="취소" variant="ghost" style={styles.flex} onPress={() => setManualOpen(false)} />
+              <Button label="저장" style={styles.flex} onPress={() => void saveManual()} />
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <ConfirmModal
+        visible={savedMin != null}
+        title="기도 시간을 기록했어요"
+        message={savedMin != null ? `오늘 기도에 ${savedMin}분을 더했어요.\n위 기록에 바로 반영됩니다.` : undefined}
+        confirmLabel="확인"
+        hideCancel
+        onCancel={() => setSavedMin(null)}
+        onConfirm={() => setSavedMin(null)}
+      />
     </Screen>
   );
 }
@@ -252,9 +339,26 @@ function AverageCard({ active }: { active: PrayerTime }) {
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
   flexShrink: { flexShrink: 1 },
   center: { alignItems: 'center', textAlign: 'center' },
   mt4: { marginTop: 4 },
+  rowDivider: { height: StyleSheet.hairlineWidth, marginVertical: Spacing.one, marginLeft: 44 },
+
+  manualBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center', padding: Spacing.five },
+  manualSheet: { width: '88%', maxWidth: 360, borderRadius: Radius.large, borderWidth: StyleSheet.hairlineWidth, padding: Spacing.four, gap: Spacing.two },
+  manualInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.medium,
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.three,
+    marginTop: Spacing.one,
+  },
+  manualInput: { flex: 1, minWidth: 0, fontSize: 28, fontWeight: '800', textAlign: 'right', paddingVertical: 0 },
+  manualBtnRow: { flexDirection: 'row', gap: Spacing.two, marginTop: Spacing.three },
 
   gaugeCenter: { position: 'absolute', left: 0, right: 0, bottom: 4, alignItems: 'center' },
   goalLabelBtn: {

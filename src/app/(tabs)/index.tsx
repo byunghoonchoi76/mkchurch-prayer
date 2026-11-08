@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useFocusEffect, useGlobalSearchParams, useRouter } from 'expo-router';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { AppState, Modal, Pressable, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from 'react-native';
+import { AppState, Modal, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HeroBanner } from '@/components/hero-banner';
@@ -296,13 +296,9 @@ const TimerCard = forwardRef<
     onComplete?: () => void;
   }
 >(function TimerCard({ active, goal, churchBaseSeconds, onComplete }, cardRef) {
-  const theme = useTheme();
   const { user } = useAuth();
   const bgm = usePrayerBgm();
   const [running, setRunning] = useState(false);
-  const [manualOpen, setManualOpen] = useState(false); // 기도 시간 직접 입력창
-  const [manualText, setManualText] = useState('');
-  const [manualErr, setManualErr] = useState<string | undefined>();
   const [paused, setPaused] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const baseRef = useRef(0); // 일시정지까지 누적된 시간(ms)
@@ -538,23 +534,6 @@ const TimerCard = forwardRef<
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 시작 버튼 없이 기도한 경우, 기도 시간을 분 단위로 직접 입력해 '오늘 기도'에 더합니다.
-  const saveManual = async () => {
-    const mins = parseInt(manualText.replace(/[^0-9]/g, ''), 10);
-    if (!Number.isFinite(mins) || mins <= 0) {
-      setManualErr('기도한 시간을 분 단위 숫자로 입력해 주세요.');
-      return;
-    }
-    if (mins > 1440) {
-      setManualErr('하루 최대 1440분(24시간)까지 입력할 수 있어요.');
-      return;
-    }
-    setManualOpen(false);
-    await active.addMinutes(mins * 60); // 분 → 초
-    setResultSeconds(mins * 60); // 결과 화면으로 확인시켜 줍니다.
-    onComplete?.();
-  };
-
   const seconds = Math.floor(elapsed / 1000);
   const display = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
   return (
@@ -577,23 +556,6 @@ const TimerCard = forwardRef<
           <ThemedText type="smallBold" themeColor="primary" style={styles.center}>
             눌러서 기도 시작
           </ThemedText>
-          <Pressable
-            onPress={() => {
-              setManualText('');
-              setManualErr(undefined);
-              setManualOpen(true);
-            }}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="시작 없이 기도한 시간 직접 입력"
-            style={({ pressed }) => [
-              styles.manualLink,
-              { borderColor: theme.primary + '55', backgroundColor: theme.primary + '12' },
-              pressed && { opacity: 0.7 },
-            ]}>
-            <Ionicons name="create-outline" size={15} color={theme.primary} />
-            <ThemedText type="smallBold" themeColor="primary">시작 없이 기도했다면 시간 직접 입력</ThemedText>
-          </Pressable>
         </>
       ) : (
         <ThemedText type="caption" themeColor="textMuted" style={styles.center}>
@@ -630,46 +592,6 @@ const TimerCard = forwardRef<
         onCancel={() => (dialog ? dialog.onCancel() : setDialog(null))}
         onConfirm={() => (dialog ? dialog.onConfirm() : setDialog(null))}
       />
-
-      {/* 시작 버튼 없이 기도한 경우 시간 직접 입력 */}
-      <Modal visible={manualOpen} transparent animationType="fade" onRequestClose={() => setManualOpen(false)}>
-        <Pressable style={styles.manualBackdrop} onPress={() => setManualOpen(false)}>
-          <Pressable style={[styles.manualSheet, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => {}}>
-            <ThemedText type="subtitle" style={styles.center}>
-              기도 시간 직접 입력
-            </ThemedText>
-            <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
-              시작 버튼 없이 기도하셨다면,{'\n'}오늘 기도한 시간을 분 단위로 입력하세요.
-            </ThemedText>
-            <View style={[styles.manualInputRow, { borderColor: theme.border, backgroundColor: theme.backgroundElement }]}>
-              <TextInput
-                value={manualText}
-                onChangeText={(t) => {
-                  setManualText(t);
-                  setManualErr(undefined);
-                }}
-                keyboardType="number-pad"
-                placeholder="0"
-                placeholderTextColor={theme.textMuted}
-                style={[styles.manualInput, { color: theme.text }]}
-                autoFocus
-              />
-              <ThemedText type="subtitle" themeColor="textSecondary">
-                분
-              </ThemedText>
-            </View>
-            {manualErr ? (
-              <ThemedText type="caption" themeColor="danger" style={styles.center}>
-                {manualErr}
-              </ThemedText>
-            ) : null}
-            <View style={styles.manualBtnRow}>
-              <Button label="취소" variant="ghost" style={styles.flex} onPress={() => setManualOpen(false)} />
-              <Button label="저장" style={styles.flex} onPress={() => void saveManual()} />
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
     </Card>
   );
 });
@@ -1176,34 +1098,6 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   flexShrink: { flexShrink: 1 },
   center: { alignItems: 'center', textAlign: 'center' },
-
-  // 기도 시간 직접 입력
-  manualLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    marginTop: Spacing.two,
-    alignSelf: 'center',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    borderRadius: Radius.pill,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  manualBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center', padding: Spacing.five },
-  manualSheet: { width: '88%', maxWidth: 360, borderRadius: Radius.large, borderWidth: StyleSheet.hairlineWidth, padding: Spacing.four, gap: Spacing.two },
-  manualInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: Radius.medium,
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.three,
-    marginTop: Spacing.one,
-  },
-  manualInput: { flex: 1, minWidth: 0, fontSize: 28, fontWeight: '800', textAlign: 'right', paddingVertical: 0 },
-  manualBtnRow: { flexDirection: 'row', gap: Spacing.two, marginTop: Spacing.three },
   mt4: { marginTop: 4 },
 
   // 기도하기 홈 — 상단 배너 + 남은 공간에 다이얼 중앙, 안내 문구는 왼쪽 맞춤

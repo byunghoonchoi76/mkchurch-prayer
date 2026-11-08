@@ -17,6 +17,7 @@ export function ConfirmModal({
   cancelLabel = '취소',
   confirmLabel = '확인',
   confirmDanger = false,
+  hideCancel = false,
   onCancel,
   onConfirm,
 }: {
@@ -26,6 +27,7 @@ export function ConfirmModal({
   cancelLabel?: string;
   confirmLabel?: string;
   confirmDanger?: boolean;
+  hideCancel?: boolean; // 단순 안내(확인 하나)일 때 true
   onCancel: () => void;
   onConfirm: () => void;
 }) {
@@ -43,7 +45,7 @@ export function ConfirmModal({
             </ThemedText>
           ) : null}
           <View style={styles.btnRow}>
-            <Button label={cancelLabel} variant="ghost" style={styles.flex} onPress={onCancel} />
+            {hideCancel ? null : <Button label={cancelLabel} variant="ghost" style={styles.flex} onPress={onCancel} />}
             <Button label={confirmLabel} variant={confirmDanger ? 'danger' : 'primary'} style={styles.flex} onPress={onConfirm} />
           </View>
         </Pressable>
