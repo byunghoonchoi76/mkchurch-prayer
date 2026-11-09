@@ -143,13 +143,13 @@ export default function AdminDashboardScreen() {
             <EmptyState icon="heart-outline" message="최근 7일간 모든 성도가 기도에 참여했어요." />
           </Card>
         ) : (
-          <CareList items={care} />
+          <CareSection items={care} members={data?.members ?? []} />
         )}
       </View>
 
       {/* ── 활발한 성도 TOP ── */}
       <View>
-        <SectionHeader title="활발한 성도 TOP" />
+        <SectionHeader title="활발한 성도 TOP 5" />
         {summary.loading && !data ? (
           <LoadingState />
         ) : top.length === 0 ? (
@@ -238,33 +238,80 @@ export default function AdminDashboardScreen() {
   );
 }
 
-/** 돌봄이 필요한 성도 목록 — 마지막 기도일이 오래된(또는 기록 없는) 순. */
-function CareList({ items }: { items: { s: AdminMemberPrayerStat; days: number | null }[] }) {
+/**
+ * 돌봄이 필요한 성도 — 평소엔 '명수'만 보여 주고, 누르면 교구별로 묶인 세부 명단이 펼쳐집니다.
+ * (최근 7일 기도 기록이 없는 성도. 심방·연락 참고용)
+ */
+function CareSection({ items, members }: { items: { s: AdminMemberPrayerStat; days: number | null }[]; members: AppMember[] }) {
   const theme = useTheme();
-  const shown = items.slice(0, 12);
+  const [open, setOpen] = useState(false);
+
+  // 성도 id → 교구. 없으면 '미지정'.
+  const parishOf = new Map(members.map((m) => [m.id, m.parish && m.parish.trim() ? m.parish.trim() : '미지정']));
+  const groups = new Map<string, { s: AdminMemberPrayerStat; days: number | null }[]>();
+  for (const it of items) {
+    const p = parishOf.get(it.s.userId) ?? '미지정';
+    const arr = groups.get(p);
+    if (arr) arr.push(it);
+    else groups.set(p, [it]);
+  }
+  // 교구 순서: 설정된 교구 순 → 그 외 → 미정/미지정 뒤로
+  const parishKeys = [
+    ...PARISH_OPTIONS.filter((p) => p !== '미정' && groups.has(p)),
+    ...[...groups.keys()].filter((k) => !(PARISH_OPTIONS as readonly string[]).includes(k) && k !== '미지정' && k !== '미정'),
+    ...(groups.has('미정') ? ['미정'] : []),
+    ...(groups.has('미지정') ? ['미지정'] : []),
+  ];
+
   return (
     <Card>
-      <ThemedText type="caption" themeColor="textMuted" style={styles.careHint}>
-        최근 7일간 기도 기록이 없는 성도 {items.length}명 · 심방·연락에 참고하세요
-      </ThemedText>
-      {shown.map((x, i) => (
-        <View key={x.s.userId}>
-          {i > 0 ? <MemberListDivider /> : null}
-          <View style={styles.careRow}>
-            <Ionicons name="person-circle-outline" size={22} color={theme.textMuted} />
-            <ThemedText type="small" style={styles.flex} numberOfLines={1}>
-              {x.s.name}
-            </ThemedText>
-            <ThemedText type="caption" themeColor={x.days === null ? 'danger' : 'textMuted'} fixed>
-              {x.days === null ? '기록 없음' : `${x.days}일 전`}
-            </ThemedText>
-          </View>
-        </View>
-      ))}
-      {items.length > shown.length ? (
-        <ThemedText type="caption" themeColor="textMuted" style={styles.moreHint}>
-          외 {items.length - shown.length}명
+      <Pressable
+        onPress={() => setOpen((v) => !v)}
+        accessibilityRole="button"
+        style={({ pressed }) => [styles.careSummary, pressed && { opacity: 0.6 }]}>
+        <Ionicons name="heart-outline" size={20} color={theme.accent} />
+        <ThemedText type="small" style={styles.flex}>
+          최근 7일 기도 기록이 없는 성도{' '}
+          <ThemedText type="smallBold" themeColor="primary">
+            {items.length}명
+          </ThemedText>
         </ThemedText>
+        <ThemedText type="caption" themeColor="textMuted" fixed>
+          {open ? '접기' : '교구별 명단'}
+        </ThemedText>
+        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color={theme.textMuted} />
+      </Pressable>
+
+      {open ? (
+        <View style={styles.careBody}>
+          <ThemedText type="caption" themeColor="textMuted" style={styles.careHint}>
+            심방·연락에 참고하세요.
+          </ThemedText>
+          {parishKeys.map((p) => (
+            <View key={p} style={styles.careGroup}>
+              <View style={[styles.careGroupHead, { borderColor: theme.border, backgroundColor: theme.backgroundElement }]}>
+                <ThemedText type="smallBold">{p}</ThemedText>
+                <ThemedText type="caption" themeColor="textMuted" fixed>
+                  {groups.get(p)!.length}명
+                </ThemedText>
+              </View>
+              {groups.get(p)!.map((x, i) => (
+                <View key={x.s.userId}>
+                  {i > 0 ? <MemberListDivider /> : null}
+                  <View style={styles.careRow}>
+                    <Ionicons name="person-circle-outline" size={22} color={theme.textMuted} />
+                    <ThemedText type="small" style={styles.flex} numberOfLines={1}>
+                      {x.s.name}
+                    </ThemedText>
+                    <ThemedText type="caption" themeColor={x.days === null ? 'danger' : 'textMuted'} fixed>
+                      {x.days === null ? '기록 없음' : `${x.days}일 전`}
+                    </ThemedText>
+                  </View>
+                </View>
+              ))}
+            </View>
+          ))}
+        </View>
       ) : null}
     </Card>
   );
@@ -491,7 +538,7 @@ function StatTile({
       <View style={[styles.statIcon, { backgroundColor: theme.backgroundSelected }]}>
         <Ionicons name={icon} size={18} color={theme.primary} />
       </View>
-      <ThemedText type="title" numberOfLines={1} style={styles.center}>
+      <ThemedText numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.5} style={[styles.statValue, styles.center]}>
         {value}
       </ThemedText>
       <ThemedText type="caption" themeColor="textMuted" fixed>
@@ -575,6 +622,7 @@ const styles = StyleSheet.create({
 
   statRow: { flexDirection: 'row', gap: Spacing.three },
   statTile: { flex: 1, alignItems: 'center', gap: Spacing.one },
+  statValue: { fontSize: 22, lineHeight: 28, fontWeight: '800', letterSpacing: -0.4 },
   statIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.one },
 
   // 최근 7일 참여
@@ -585,7 +633,19 @@ const styles = StyleSheet.create({
   // 돌봄이 필요한 성도
   careHint: { marginBottom: Spacing.two },
   careRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, paddingVertical: Spacing.two },
-  moreHint: { marginTop: Spacing.two, textAlign: 'center' },
+  careSummary: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, paddingVertical: Spacing.one },
+  careBody: { marginTop: Spacing.two, gap: Spacing.two },
+  careGroup: { gap: Spacing.one },
+  careGroupHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.one + 2,
+    borderRadius: Radius.medium,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
 
   // 활발한 성도 TOP
   topRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
