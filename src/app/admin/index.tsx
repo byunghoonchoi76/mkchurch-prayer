@@ -214,6 +214,13 @@ export default function AdminDashboardScreen() {
             }
             onPress={() => router.push('/prayer/communal')}
           />
+          <View style={[styles.rowDivider, { backgroundColor: theme.border }]} />
+          <ListRow
+            icon="tv-outline"
+            title="본당 기도시간 디스플레이"
+            subtitle="본당 입구 화면(태블릿·TV)용 · 전체 기도시간을 크게 표시"
+            onPress={() => router.push('/display')}
+          />
         </Card>
       </View>
 
@@ -623,6 +630,7 @@ const styles = StyleSheet.create({
   statRow: { flexDirection: 'row', gap: Spacing.three },
   statTile: { flex: 1, alignItems: 'center', gap: Spacing.one },
   statValue: { fontSize: 22, lineHeight: 28, fontWeight: '800', letterSpacing: -0.4 },
+  rowDivider: { height: StyleSheet.hairlineWidth, marginVertical: Spacing.one, marginLeft: 44 },
   statIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.one },
 
   // 최근 7일 참여

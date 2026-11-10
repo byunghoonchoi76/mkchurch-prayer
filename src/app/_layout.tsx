@@ -33,7 +33,7 @@ function useStartupGate() {
     const onWelcome = segments[0] === 'welcome';
     // 아직 로그인/손님을 정하지 않아도 열 수 있어야 하는 화면들.
     // 로그인·회원가입과, 앱스토어 심사·외부 링크에서 로그인 없이 접근해야 하는 약관/방침 페이지.
-    const PUBLIC_ROUTES = ['sign-in', 'privacy', 'terms', 'email-refusal'];
+    const PUBLIC_ROUTES = ['sign-in', 'privacy', 'terms', 'email-refusal', 'display'];
     const onAuthFlow = onWelcome || PUBLIC_ROUTES.includes(segments[0] ?? '');
     const decided = !!user || guestAck === true;
     if (!decided && !onAuthFlow) {
@@ -107,6 +107,7 @@ function RootNavigator() {
       <Stack.Screen name="prayer/edit/[id]" options={{ title: '기도제목 수정', presentation: 'modal' }} />
       <Stack.Screen name="reminders" options={{ title: '기도 알림' }} />
       <Stack.Screen name="profile" options={{ title: '내 정보 수정' }} />
+      <Stack.Screen name="display" options={{ headerShown: false }} />
       <Stack.Screen name="privacy" options={{ title: '개인정보처리방침' }} />
       <Stack.Screen name="terms" options={{ title: '이용약관' }} />
       <Stack.Screen name="sign-in" options={{ title: '로그인', presentation: 'modal' }} />

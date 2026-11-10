@@ -26,22 +26,25 @@ export default function PrayerRecordsScreen() {
   const active = useAllPrayerTime();
   const { goal } = useWeeklyGoal('personal');
 
-  // 시작 버튼 없이 기도한 경우, 오늘 기도 시간을 분 단위로 직접 기록합니다.
+  // 시작 버튼 없이 기도한 경우 오늘 기도 시간을 직접 기록하거나(추가),
+  // 잘못 입력했을 때 되돌릴 수 있도록(빼기) 합니다.
   const [manualOpen, setManualOpen] = useState(false);
+  const [manualMode, setManualMode] = useState<'add' | 'subtract'>('add');
   const [manualText, setManualText] = useState('');
   const [manualErr, setManualErr] = useState<string | undefined>();
-  const [savedMin, setSavedMin] = useState<number | null>(null);
+  const [savedMsg, setSavedMsg] = useState<string | null>(null);
 
   const openManual = () => {
     setManualText('');
     setManualErr(undefined);
+    setManualMode('add');
     setManualOpen(true);
   };
 
   const saveManual = async () => {
     const mins = parseInt(manualText.replace(/[^0-9]/g, ''), 10);
     if (!Number.isFinite(mins) || mins <= 0) {
-      setManualErr('기도한 시간을 분 단위 숫자로 입력해 주세요.');
+      setManualErr('시간을 분 단위 숫자로 입력해 주세요.');
       return;
     }
     if (mins > 1440) {
@@ -49,9 +52,19 @@ export default function PrayerRecordsScreen() {
       return;
     }
     setManualOpen(false);
-    await active.addMinutes(mins * 60); // 분 → 초
-    active.reload();
-    setSavedMin(mins);
+    if (manualMode === 'add') {
+      await active.addMinutes(mins * 60); // 분 → 초
+      active.reload();
+      setSavedMsg(`오늘 기도에 ${mins}분을 더했어요.`);
+    } else {
+      // 빼기: 개인 기록의 '오늘' 값에서 빼되 0분 아래로는 내려가지 않게 합니다.
+      const curSec = active.personalTodayMinutes; // 초
+      const nextSec = Math.max(0, curSec - mins * 60);
+      const removedMin = Math.round((curSec - nextSec) / 60);
+      await active.setTodayMinutes(nextSec);
+      active.reload();
+      setSavedMsg(removedMin > 0 ? `오늘 기도에서 ${removedMin}분을 뺐어요.` : '오늘 뺄 기도 기록이 없어요.');
+    }
   };
 
   return (
@@ -83,10 +96,36 @@ export default function PrayerRecordsScreen() {
             <ThemedText type="subtitle" style={styles.center}>
               기도 시간 직접 입력
             </ThemedText>
+
+            {/* 추가 / 빼기 선택 */}
+            <View style={[styles.segment, { borderColor: theme.border, backgroundColor: theme.backgroundElement }]}>
+              {(['add', 'subtract'] as const).map((m) => {
+                const on = manualMode === m;
+                return (
+                  <Pressable
+                    key={m}
+                    onPress={() => {
+                      setManualMode(m);
+                      setManualErr(undefined);
+                    }}
+                    style={[styles.segmentBtn, on && { backgroundColor: theme.primary }]}>
+                    <ThemedText type="smallBold" fixed style={{ color: on ? theme.onPrimary : theme.textSecondary }}>
+                      {m === 'add' ? '추가' : '빼기'}
+                    </ThemedText>
+                  </Pressable>
+                );
+              })}
+            </View>
+
             <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
-              시작 버튼 없이 기도하셨다면,{'\n'}오늘 기도한 시간을 분 단위로 입력하세요.
+              {manualMode === 'add'
+                ? '시작 버튼 없이 기도하셨다면,\n오늘 기도한 시간을 분 단위로 더하세요.'
+                : `잘못 입력하셨다면 분 단위로 빼세요.\n(오늘 기록: ${Math.round(active.personalTodayMinutes / 60)}분)`}
             </ThemedText>
             <View style={[styles.manualInputRow, { borderColor: theme.border, backgroundColor: theme.backgroundElement }]}>
+              <ThemedText type="subtitle" themeColor={manualMode === 'add' ? 'primary' : 'danger'}>
+                {manualMode === 'add' ? '+' : '−'}
+              </ThemedText>
               <TextInput
                 value={manualText}
                 onChangeText={(t) => {
@@ -110,20 +149,25 @@ export default function PrayerRecordsScreen() {
             ) : null}
             <View style={styles.manualBtnRow}>
               <Button label="취소" variant="ghost" style={styles.flex} onPress={() => setManualOpen(false)} />
-              <Button label="저장" style={styles.flex} onPress={() => void saveManual()} />
+              <Button
+                label={manualMode === 'add' ? '추가' : '빼기'}
+                variant={manualMode === 'add' ? 'primary' : 'danger'}
+                style={styles.flex}
+                onPress={() => void saveManual()}
+              />
             </View>
           </Pressable>
         </Pressable>
       </Modal>
 
       <ConfirmModal
-        visible={savedMin != null}
-        title="기도 시간을 기록했어요"
-        message={savedMin != null ? `오늘 기도에 ${savedMin}분을 더했어요.\n위 기록에 바로 반영됩니다.` : undefined}
+        visible={savedMsg != null}
+        title="기도 기록을 반영했어요"
+        message={savedMsg != null ? `${savedMsg}\n위 기록에 바로 반영됩니다.` : undefined}
         confirmLabel="확인"
         hideCancel
-        onCancel={() => setSavedMin(null)}
-        onConfirm={() => setSavedMin(null)}
+        onCancel={() => setSavedMsg(null)}
+        onConfirm={() => setSavedMsg(null)}
       />
     </Screen>
   );
@@ -359,6 +403,16 @@ const styles = StyleSheet.create({
   },
   manualInput: { flex: 1, minWidth: 0, fontSize: 28, fontWeight: '800', textAlign: 'right', paddingVertical: 0 },
   manualBtnRow: { flexDirection: 'row', gap: Spacing.two, marginTop: Spacing.three },
+  segment: {
+    flexDirection: 'row',
+    alignSelf: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.pill,
+    padding: 3,
+    gap: 3,
+    marginTop: Spacing.one,
+  },
+  segmentBtn: { paddingHorizontal: Spacing.four, paddingVertical: Spacing.one + 2, borderRadius: Radius.pill, alignItems: 'center' },
 
   gaugeCenter: { position: 'absolute', left: 0, right: 0, bottom: 4, alignItems: 'center' },
   goalLabelBtn: {

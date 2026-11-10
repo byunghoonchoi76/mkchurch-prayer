@@ -189,6 +189,28 @@ export function usePrayerTime(kind: PrayerKind) {
     }
   }, [server, kind, entries, storageKey]);
 
+  // 오늘 기록을 '절대값'으로 맞춥니다(초). 잘못 입력한 시간을 뺄 때 씁니다.
+  // 서버는 직접 수정 정책이 없어 '오늘 행 삭제 후 다시 기록'으로 설정합니다.
+  const setTodayMinutes = useCallback(
+    async (valueSeconds: number) => {
+      const v = Math.max(0, Math.min(86400, Math.round(valueSeconds)));
+      const today = toDateKey();
+      setEntries((prev) => {
+        const rest = prev.filter((e) => e.date !== today);
+        return v > 0 ? [{ date: today, minutes: v }, ...rest] : rest;
+      });
+      if (server) {
+        await repository.clearMyPrayerTime(kind, today);
+        if (v > 0) await repository.addMyPrayerTime(kind, today, v);
+      } else {
+        const rest = entries.filter((e) => e.date !== today);
+        const next = v > 0 ? [{ date: today, minutes: v }, ...rest] : rest;
+        await AsyncStorage.setItem(storageKey, JSON.stringify(next));
+      }
+    },
+    [server, kind, entries, storageKey],
+  );
+
   // 반응형 오늘 날짜 — 자정이 지나면 갱신되어 '오늘 기도시간'이 리셋됩니다.
   const todayKey = useToday();
   const today = entries.find((e) => e.date === todayKey);
@@ -204,6 +226,7 @@ export function usePrayerTime(kind: PrayerKind) {
     week: recentDays(entries, 7),
     totalMinutes,
     addMinutes,
+    setTodayMinutes,
     clearToday,
   };
 }
@@ -248,6 +271,9 @@ export function useAllPrayerTime() {
     week: recentDays(entries, 7),
     totalMinutes: personal.totalMinutes + communal.totalMinutes,
     addMinutes: personal.addMinutes, // 통합 타이머 → 개인 기록에 누적
+    // 수동 기록 차감(빼기)용 — 개인 기록의 '오늘' 값을 기준으로 조정합니다.
+    personalTodayMinutes: personal.todayMinutes,
+    setTodayMinutes: personal.setTodayMinutes,
     clearToday,
   };
 }
