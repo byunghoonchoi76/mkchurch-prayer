@@ -1,14 +1,14 @@
 import { Image } from 'expo-image';
 import { Stack } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Animated, Easing, Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
-import { ChurchInfo } from '@/constants/church';
 import { Fonts } from '@/constants/theme';
 import { repository, useAsyncData } from '@/lib/data';
 
 const HERO = require('@/assets/images/prayer-home-hero.jpg');
-const REFRESH_MS = 20000; // 20초마다 최신 합계 반영
+const REFRESH_MS = 10000; // 10초마다 최신 합계 반영
+const GOLD = '#F2C14E';
 
 /** 누적 초 → "1,284시간 37분" (시 단위 천 단위 콤마) */
 function formatTotal(seconds: number): { hours: string; minutes: string } {
@@ -18,33 +18,48 @@ function formatTotal(seconds: number): { hours: string; minutes: string } {
   return { hours: h.toLocaleString('ko-KR'), minutes: String(m) };
 }
 
-/** 값이 바뀔 때 이전 값에서 새 값으로 부드럽게 올라가는 카운트업 */
-function useCountUp(target: number, duration = 1400): number {
-  const [value, setValue] = useState(target);
-  const fromRef = useRef(target);
-  const rafRef = useRef<number | null>(null);
+/** 글자가 바뀔 때 세로로 '뒤집히는'(flip) 효과로 새 숫자를 보여 줍니다. */
+function FlipChar({ char, style }: { char: string; style: object }) {
+  const [shown, setShown] = useState(char);
+  const shownRef = useRef(char);
+  const anim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    const from = fromRef.current;
-    const to = target;
-    if (from === to) return;
-    const start = Date.now();
-    const tick = () => {
-      const t = Math.min(1, (Date.now() - start) / duration);
-      const eased = 1 - Math.pow(1 - t, 3); // ease-out
-      const cur = Math.round(from + (to - from) * eased);
-      setValue(cur);
-      fromRef.current = cur;
-      if (t < 1) rafRef.current = requestAnimationFrame(tick);
-      else fromRef.current = to;
-    };
-    rafRef.current = requestAnimationFrame(tick);
-    return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    };
-  }, [target, duration]);
+    if (char === shownRef.current) return;
+    anim.setValue(0);
+    const id = anim.addListener(({ value }) => {
+      // 카드가 모서리(90°)로 섰을 때 숫자를 교체해, 자연스럽게 뒤집혀 보이게 합니다.
+      if (value >= 0.5 && shownRef.current !== char) {
+        shownRef.current = char;
+        setShown(char);
+      }
+    });
+    Animated.timing(anim, {
+      toValue: 1,
+      duration: 480,
+      easing: Easing.inOut(Easing.cubic),
+      useNativeDriver: false,
+    }).start(() => anim.removeListener(id));
+    return () => anim.removeListener(id);
+  }, [char, anim]);
 
-  return value;
+  const rotateX = anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: ['0deg', '90deg', '0deg'] });
+  const opacity = anim.interpolate({ inputRange: [0, 0.3, 0.5, 0.7, 1], outputRange: [1, 0.35, 0.1, 0.35, 1] });
+
+  return (
+    <Animated.Text style={[style, { opacity, transform: [{ perspective: 600 }, { rotateX }] }]}>{shown}</Animated.Text>
+  );
+}
+
+/** 숫자 문자열을 한 글자씩 플립 글자로 나열합니다. */
+function FlipNumber({ text, style }: { text: string; style: object }) {
+  return (
+    <View style={styles.flipRow}>
+      {text.split('').map((c, i) => (
+        <FlipChar key={i} char={c} style={style} />
+      ))}
+    </View>
+  );
 }
 
 /**
@@ -56,7 +71,7 @@ export default function PrayerWallDisplay() {
   const { width, height } = useWindowDimensions();
   const church = useAsyncData(() => repository.getChurchPrayerSeconds().catch(() => 0), []);
 
-  // 주기적으로 최신 합계를 가져옵니다.
+  // 주기적으로 최신 합계를 가져옵니다. (값이 바뀌면 숫자가 플립됩니다)
   useEffect(() => {
     const id = setInterval(() => church.reload(), REFRESH_MS);
     return () => clearInterval(id);
@@ -89,8 +104,7 @@ export default function PrayerWallDisplay() {
     };
   }, []);
 
-  const seconds = useCountUp(church.data ?? 0);
-  const { hours, minutes } = formatTotal(seconds);
+  const { hours, minutes } = formatTotal(church.data ?? 0);
 
   // 가로/세로, 큰 화면/작은 화면에 맞춰 숫자 크기를 조절합니다.
   const landscape = width > height;
@@ -98,7 +112,8 @@ export default function PrayerWallDisplay() {
   const numSize = Math.round(Math.max(44, Math.min(landscape ? 150 : 96, base * (landscape ? 0.16 : 0.2))));
   const unitSize = Math.round(numSize * 0.42);
   const labelSize = Math.round(Math.max(16, Math.min(34, base * 0.04)));
-  const churchSize = Math.round(Math.max(18, Math.min(40, base * 0.045)));
+
+  const numStyle = { ...styles.number, fontSize: numSize };
 
   return (
     <View style={styles.root}>
@@ -107,38 +122,32 @@ export default function PrayerWallDisplay() {
       <View style={[StyleSheet.absoluteFill, styles.overlay]} />
 
       <View style={styles.content}>
-        <Text style={[styles.church, { fontSize: churchSize }]}>{ChurchInfo.name}</Text>
-
+        <View style={styles.spacer} />
         <View style={styles.center}>
-          <Text style={[styles.label, { fontSize: labelSize }]}>온 성도가 함께</Text>
+          <Text style={[styles.label, { fontSize: labelSize }]}>목양교회 온 성도가 함께</Text>
           <View style={styles.numberRow}>
-            <Text style={[styles.number, { fontSize: numSize }]} numberOfLines={1} adjustsFontSizeToFit>
-              {hours}
-            </Text>
+            <FlipNumber text={hours} style={numStyle} />
             <Text style={[styles.unit, { fontSize: unitSize }]}>시간</Text>
-            <Text style={[styles.number, { fontSize: numSize }]} numberOfLines={1} adjustsFontSizeToFit>
-              {minutes}
-            </Text>
+            <FlipNumber text={minutes} style={numStyle} />
             <Text style={[styles.unit, { fontSize: unitSize }]}>분</Text>
           </View>
           <Text style={[styles.label, { fontSize: labelSize }]}>기도하고 있습니다</Text>
         </View>
-
         <Text style={[styles.verse, { fontSize: Math.round(labelSize * 0.8) }]}>“쉬지 말고 기도하라” · 데살로니가전서 5장 17절</Text>
       </View>
     </View>
   );
 }
 
-const GOLD = '#F2C14E';
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#0b2435' },
   overlay: { backgroundColor: 'rgba(8,24,38,0.7)' },
   content: { flex: 1, alignItems: 'center', justifyContent: 'space-between', paddingVertical: '7%', paddingHorizontal: '6%' },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10 },
-  church: { fontFamily: Fonts.sans, color: '#ffffff', fontWeight: '800', letterSpacing: 0.5, opacity: 0.92 },
-  label: { fontFamily: Fonts.sans, color: '#dce7ef', fontWeight: '600' },
+  spacer: { height: 1 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 },
+  label: { fontFamily: Fonts.sans, color: '#dce7ef', fontWeight: '600', textAlign: 'center' },
   numberRow: { flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', justifyContent: 'center', gap: 6 },
+  flipRow: { flexDirection: 'row', alignItems: 'baseline' },
   number: { fontFamily: Fonts.sans, color: GOLD, fontWeight: '800', letterSpacing: -1, fontVariant: ['tabular-nums'] },
   unit: { fontFamily: Fonts.sans, color: '#ffffff', fontWeight: '700', marginRight: 10 },
   verse: { fontFamily: Fonts.sans, color: '#cdd9e2', fontWeight: '500', textAlign: 'center', opacity: 0.85 },

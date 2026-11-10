@@ -1,12 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Modal, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { MemberListDivider, MemberRow } from '@/components/member-row';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
-import { Card, EmptyState, ErrorState, ListRow, LoadingState, SectionHeader } from '@/components/ui';
+import { Button, Card, EmptyState, ErrorState, ListRow, LoadingState, SectionHeader } from '@/components/ui';
 import { PARISH_OPTIONS } from '@/constants/church-roles';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -47,6 +47,14 @@ function memberInitial(name: string): string {
   return '#';
 }
 
+/** 본당 디스플레이의 공개 주소. 배포된 base(…/mkchurch-prayer/)를 그대로 써서 정확한 링크를 만듭니다. */
+function displayUrl(): string {
+  if (Platform.OS !== 'web' || typeof document === 'undefined' || typeof window === 'undefined') return '';
+  const manifest = document.querySelector('link[rel="manifest"]') as HTMLLinkElement | null;
+  if (manifest?.href) return manifest.href.replace(/manifest\.json(\?.*)?$/, 'display');
+  return window.location.origin + '/display';
+}
+
 /**
  * 관리자 대시보드 — 교회 관리자가 '기도 참여 현황'과 성도·공동 기도제목을 한곳에서 봅니다.
  * (설정 › 관리자 › 관리자 대시보드)
@@ -56,6 +64,29 @@ export default function AdminDashboardScreen() {
   const theme = useTheme();
   const { user, isAdmin } = useAuth();
   const [query, setQuery] = useState('');
+  const [shareOpen, setShareOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const dispUrl = displayUrl();
+  const canShare = Platform.OS === 'web' && typeof navigator !== 'undefined' && typeof (navigator as { share?: unknown }).share === 'function';
+
+  const copyDisplayUrl = async () => {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        await navigator.clipboard.writeText(dispUrl);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2500);
+      }
+    } catch {
+      /* 무시 */
+    }
+  };
+  const shareDisplayUrl = async () => {
+    try {
+      await (navigator as unknown as { share: (d: object) => Promise<void> }).share({ title: '목양교회 본당 기도시간 디스플레이', url: dispUrl });
+    } catch {
+      /* 취소/실패 시 무시 */
+    }
+  };
 
   // 요약 수치 + 성도 명단 + 성도별 기도 집계를 함께 불러옵니다.
   const summary = useAsyncData(async () => {
@@ -218,8 +249,19 @@ export default function AdminDashboardScreen() {
           <ListRow
             icon="tv-outline"
             title="본당 기도시간 디스플레이"
-            subtitle="본당 입구 화면(태블릿·TV)용 · 전체 기도시간을 크게 표시"
-            onPress={() => router.push('/display')}
+            subtitle="링크를 복사해 본당 TV·태블릿 브라우저에서 열어 주세요"
+            right={
+              <View style={styles.rightRow}>
+                <ThemedText type="caption" themeColor="primary" fixed>
+                  링크 공유
+                </ThemedText>
+                <Ionicons name="share-outline" size={16} color={theme.primary} />
+              </View>
+            }
+            onPress={() => {
+              setCopied(false);
+              setShareOpen(true);
+            }}
           />
         </Card>
       </View>
@@ -241,6 +283,42 @@ export default function AdminDashboardScreen() {
       <ThemedText type="caption" themeColor="textMuted" style={styles.note}>
         성도 계정을 삭제하면 되돌릴 수 없습니다. 삭제 전에 한 번 더 확인해 주세요.
       </ThemedText>
+
+      {/* 본당 디스플레이 링크 공유 */}
+      <Modal visible={shareOpen} transparent animationType="fade" onRequestClose={() => setShareOpen(false)}>
+        <Pressable style={styles.shareBackdrop} onPress={() => setShareOpen(false)}>
+          <Pressable style={[styles.shareSheet, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => {}}>
+            <View style={[styles.shareIcon, { backgroundColor: theme.backgroundSelected }]}>
+              <Ionicons name="tv-outline" size={22} color={theme.primary} />
+            </View>
+            <ThemedText type="subtitle" style={styles.center}>
+              본당 디스플레이 링크
+            </ThemedText>
+            <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
+              이 링크를 본당 TV·태블릿 브라우저에서 열면,{'\n'}전체 기도시간이 큰 화면으로 표시됩니다. (로그인 불필요)
+            </ThemedText>
+            <View style={[styles.urlBox, { borderColor: theme.border, backgroundColor: theme.backgroundElement }]}>
+              <ThemedText type="small" selectable themeColor="primary" style={styles.urlText}>
+                {dispUrl || '/display'}
+              </ThemedText>
+            </View>
+            {copied ? (
+              <ThemedText type="caption" themeColor="primary" style={styles.center}>
+                링크를 복사했어요! TV·태블릿 브라우저에 붙여넣어 여세요.
+              </ThemedText>
+            ) : null}
+            <View style={styles.shareBtnRow}>
+              <Button label="미리 보기" variant="ghost" style={styles.flex} onPress={() => { setShareOpen(false); router.push('/display'); }} />
+              <Button
+                label={canShare ? '공유' : '복사'}
+                icon={canShare ? 'share-outline' : 'copy-outline'}
+                style={styles.flex}
+                onPress={() => void (canShare ? shareDisplayUrl() : copyDisplayUrl())}
+              />
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </Screen>
   );
 }
@@ -631,6 +709,14 @@ const styles = StyleSheet.create({
   statTile: { flex: 1, alignItems: 'center', gap: Spacing.one },
   statValue: { fontSize: 22, lineHeight: 28, fontWeight: '800', letterSpacing: -0.4 },
   rowDivider: { height: StyleSheet.hairlineWidth, marginVertical: Spacing.one, marginLeft: 44 },
+
+  // 본당 디스플레이 링크 공유 모달
+  shareBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center', padding: Spacing.five },
+  shareSheet: { width: '90%', maxWidth: 380, borderRadius: Radius.large, borderWidth: StyleSheet.hairlineWidth, padding: Spacing.four, gap: Spacing.two, alignItems: 'center' },
+  shareIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.one },
+  urlBox: { alignSelf: 'stretch', borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.medium, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two + 2, marginTop: Spacing.one },
+  urlText: { fontWeight: '700', textAlign: 'center' },
+  shareBtnRow: { flexDirection: 'row', gap: Spacing.two, marginTop: Spacing.three, alignSelf: 'stretch' },
   statIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.one },
 
   // 최근 7일 참여
