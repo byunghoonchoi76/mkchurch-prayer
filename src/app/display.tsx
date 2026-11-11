@@ -1,5 +1,4 @@
 import { Image } from 'expo-image';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Stack } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
@@ -105,22 +104,6 @@ export default function PrayerWallDisplay() {
     };
   }, []);
 
-  // 등대 불빛이 천천히 도는 효과 — 등불을 중심으로 빛줄기가 한 바퀴 돌며,
-  // 하늘(좌상단) 쪽을 지날 때 은은하게 밝아졌다가 사라집니다.
-  const spin = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.timing(spin, { toValue: 1, duration: 12000, easing: Easing.linear, useNativeDriver: false }),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [spin]);
-  const beamRotate = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
-  const beamOpacity = spin.interpolate({
-    inputRange: [0, 0.2, 0.375, 0.55, 0.78, 1],
-    outputRange: [0, 0.06, 0.5, 0.12, 0, 0],
-  });
-
   const { hours, minutes } = formatTotal(church.data ?? 0);
 
   // 가로/세로, 큰 화면/작은 화면에 맞춰 숫자 크기를 조절합니다.
@@ -132,39 +115,11 @@ export default function PrayerWallDisplay() {
 
   const numStyle = { ...styles.number, fontSize: numSize };
 
-  // 등댓불(등불) 위치 — 사진이 cover로 채워질 때의 대략적 위치. 가로(TV)·세로(태블릿)에 맞춥니다.
-  const lampX = landscape ? 0.71 : 0.9;
-  const lampY = landscape ? 0.28 : 0.3;
-  const beamLen = Math.round(Math.max(width, height) * 0.95);
-  const beamW = Math.round(Math.min(width, height) * 0.16);
-
   return (
     <View style={styles.root}>
       <Stack.Screen options={{ headerShown: false, title: '본당 기도 디스플레이' }} />
       <Image source={HERO} style={StyleSheet.absoluteFill} contentFit="cover" />
       <View style={[StyleSheet.absoluteFill, styles.overlay]} />
-
-      {/* 천천히 도는 등대 불빛 */}
-      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-        <Animated.View
-          style={{
-            position: 'absolute',
-            left: width * lampX - beamW / 2,
-            top: height * lampY,
-            width: beamW,
-            height: beamLen,
-            transformOrigin: '50% 0%',
-            opacity: beamOpacity,
-            transform: [{ rotate: beamRotate }],
-          }}>
-          <LinearGradient
-            colors={['rgba(255,243,208,0.9)', 'rgba(255,243,208,0.0)']}
-            start={{ x: 0.5, y: 0 }}
-            end={{ x: 0.5, y: 1 }}
-            style={{ flex: 1, borderBottomLeftRadius: beamW, borderBottomRightRadius: beamW }}
-          />
-        </Animated.View>
-      </View>
 
       <View style={styles.content}>
         <View style={styles.spacer} />
