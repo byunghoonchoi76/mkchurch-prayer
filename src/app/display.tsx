@@ -1,7 +1,8 @@
+import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Stack } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Animated, Easing, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { Fonts } from '@/constants/theme';
 import { repository, useAsyncData } from '@/lib/data';
@@ -104,6 +105,25 @@ export default function PrayerWallDisplay() {
     };
   }, []);
 
+  // 전체화면 토글 (웹 전용) — 한 번 탭하면 주소창·탭 없이 꽉 찬 화면이 됩니다.
+  const [isFs, setIsFs] = useState(false);
+  const fsAvailable = Platform.OS === 'web' && typeof document !== 'undefined' && !!document.documentElement?.requestFullscreen;
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    const onChange = () => setIsFs(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+  const toggleFullscreen = () => {
+    if (typeof document === 'undefined') return;
+    try {
+      if (document.fullscreenElement) void document.exitFullscreen();
+      else void document.documentElement.requestFullscreen();
+    } catch {
+      /* 무시 */
+    }
+  };
+
   const { hours, minutes } = formatTotal(church.data ?? 0);
 
   // 가로/세로, 큰 화면/작은 화면에 맞춰 숫자 크기를 조절합니다.
@@ -135,6 +155,17 @@ export default function PrayerWallDisplay() {
         </View>
         <Text style={[styles.verse, { fontSize: Math.round(labelSize * 0.8) }]}>“쉬지 말고 기도하라” · 데살로니가전서 5장 17절</Text>
       </View>
+
+      {/* 전체화면 버튼 (웹) — 평소엔 은은하게, 눌러서 전체화면 켜고/끕니다. */}
+      {fsAvailable ? (
+        <Pressable
+          onPress={toggleFullscreen}
+          accessibilityRole="button"
+          accessibilityLabel={isFs ? '전체화면 끄기' : '전체화면'}
+          style={({ pressed }) => [styles.fsBtn, { opacity: pressed ? 0.9 : 0.4 }]}>
+          <Ionicons name={isFs ? 'contract-outline' : 'expand-outline'} size={20} color="#fff" />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -151,4 +182,15 @@ const styles = StyleSheet.create({
   number: { fontFamily: Fonts.sans, color: GOLD, fontWeight: '800', letterSpacing: -1, fontVariant: ['tabular-nums'] },
   unit: { fontFamily: Fonts.sans, color: '#ffffff', fontWeight: '700', marginRight: 10 },
   verse: { fontFamily: Fonts.sans, color: '#cdd9e2', fontWeight: '500', textAlign: 'center', opacity: 0.85 },
+  fsBtn: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
 });
