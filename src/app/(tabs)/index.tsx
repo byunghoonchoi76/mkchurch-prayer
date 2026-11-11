@@ -152,6 +152,7 @@ export default function MyPrayerScreen() {
   useFocusEffect(
     useCallback(() => {
       churchTotal.reload();
+      active.reload(); // 다른 탭(기도 기록)에서 수동으로 더하거나 뺀 내 기록도 홈 '온 성도가 함께'에 바로 반영
       const id = setInterval(() => churchTotal.reload(), 12000);
       return () => clearInterval(id);
       // eslint-disable-next-line react-hooks/exhaustive-deps
