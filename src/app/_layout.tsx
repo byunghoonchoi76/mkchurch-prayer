@@ -110,6 +110,7 @@ function RootNavigator() {
       <Stack.Screen name="display" options={{ headerShown: false }} />
       <Stack.Screen name="privacy" options={{ title: '개인정보처리방침' }} />
       <Stack.Screen name="terms" options={{ title: '이용약관' }} />
+      <Stack.Screen name="email-refusal" options={{ title: '이메일무단수집거부' }} />
       <Stack.Screen name="sign-in" options={{ title: '로그인', presentation: 'modal' }} />
       <Stack.Screen name="admin/index" options={{ title: '관리자 대시보드' }} />
       <Stack.Screen name="admin/members" options={{ title: '성도 명단' }} />

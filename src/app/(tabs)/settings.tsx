@@ -90,6 +90,7 @@ export default function SettingsScreen() {
             onPress={() => router.push('/privacy')}
           />
           <ListRow icon="document-text-outline" title="이용약관" onPress={() => router.push('/terms')} />
+          <ListRow icon="mail-unread-outline" title="이메일무단수집거부" onPress={() => router.push('/email-refusal')} />
         </Card>
       </View>
 
