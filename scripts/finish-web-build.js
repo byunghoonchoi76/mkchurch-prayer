@@ -55,6 +55,16 @@ fs.writeFileSync(indexPath, html);
 // 정적 호스팅에서 새로고침·딥링크가 되도록 하는 SPA 폴백
 fs.copyFileSync(indexPath, path.join(outDir, '404.html'));
 
+// 공개 페이지(약관·방침·계정삭제 등)는 직접 주소로 열어도 HTTP 200을 반환해야 합니다.
+// 단일 출력(SPA)은 해당 경로에 실제 파일이 없어 GitHub Pages가 404.html을 "404 상태"로
+// 내려주는데, 구글 플레이의 데이터 보안 URL 검사처럼 상태코드를 확인하는 곳에서 걸립니다.
+// 그래서 각 공개 경로에 index.html 복사본(<route>.html)을 두어 200으로 응답하게 합니다.
+// (브라우저에서 열리면 같은 앱이 로드되어 URL에 맞는 화면으로 라우팅됩니다.)
+const PUBLIC_HTML_ROUTES = ['privacy', 'terms', 'email-refusal', 'account-deletion', 'display'];
+for (const route of PUBLIC_HTML_ROUTES) {
+  fs.copyFileSync(indexPath, path.join(outDir, `${route}.html`));
+}
+
 // _expo 처럼 밑줄로 시작하는 폴더가 무시되지 않도록 (GitHub Pages)
 fs.writeFileSync(path.join(outDir, '.nojekyll'), '');
 
