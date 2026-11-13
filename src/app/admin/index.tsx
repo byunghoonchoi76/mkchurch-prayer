@@ -180,7 +180,7 @@ export default function AdminDashboardScreen() {
 
       {/* ── 활발한 성도 TOP ── */}
       <View>
-        <SectionHeader title="활발한 성도 TOP 5" />
+        <SectionHeader title="기도 시간 TOP 5" />
         {summary.loading && !data ? (
           <LoadingState />
         ) : top.length === 0 ? (
