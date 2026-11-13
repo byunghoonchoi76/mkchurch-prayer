@@ -91,6 +91,7 @@ export default function SettingsScreen() {
           />
           <ListRow icon="document-text-outline" title="이용약관" onPress={() => router.push('/terms')} />
           <ListRow icon="mail-unread-outline" title="이메일무단수집거부" onPress={() => router.push('/email-refusal')} />
+          <ListRow icon="trash-outline" title="계정 삭제 요청" onPress={() => router.push('/account-deletion')} />
         </Card>
       </View>
 

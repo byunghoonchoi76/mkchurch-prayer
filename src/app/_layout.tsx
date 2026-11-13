@@ -33,7 +33,7 @@ function useStartupGate() {
     const onWelcome = segments[0] === 'welcome';
     // 아직 로그인/손님을 정하지 않아도 열 수 있어야 하는 화면들.
     // 로그인·회원가입과, 앱스토어 심사·외부 링크에서 로그인 없이 접근해야 하는 약관/방침 페이지.
-    const PUBLIC_ROUTES = ['sign-in', 'privacy', 'terms', 'email-refusal', 'display'];
+    const PUBLIC_ROUTES = ['sign-in', 'privacy', 'terms', 'email-refusal', 'account-deletion', 'display'];
     const onAuthFlow = onWelcome || PUBLIC_ROUTES.includes(segments[0] ?? '');
     const decided = !!user || guestAck === true;
     if (!decided && !onAuthFlow) {
@@ -111,6 +111,7 @@ function RootNavigator() {
       <Stack.Screen name="privacy" options={{ title: '개인정보처리방침' }} />
       <Stack.Screen name="terms" options={{ title: '이용약관' }} />
       <Stack.Screen name="email-refusal" options={{ title: '이메일무단수집거부' }} />
+      <Stack.Screen name="account-deletion" options={{ title: '계정 삭제 요청' }} />
       <Stack.Screen name="sign-in" options={{ title: '로그인', presentation: 'modal' }} />
       <Stack.Screen name="admin/index" options={{ title: '관리자 대시보드' }} />
       <Stack.Screen name="admin/members" options={{ title: '성도 명단' }} />
