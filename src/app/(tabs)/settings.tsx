@@ -122,7 +122,7 @@ export default function SettingsScreen() {
       </View>
 
       <ThemedText type="caption" themeColor="textMuted" style={styles.copyright}>
-        © 2026 구리 목양교회.
+        © 2026 목양교회.
       </ThemedText>
     </Screen>
   );

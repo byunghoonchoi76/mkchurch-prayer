@@ -5,7 +5,7 @@
  * 값이 빈 문자열이면 해당 항목은 화면에 표시되지 않습니다.
  */
 export const ChurchInfo = {
-  name: '구리 목양교회',
+  name: '목양교회',
   slogan: '두려워하지 말라, 강하고 담대하라',
   sloganVerse: '신 31:6, 수 1:9',
   pastor: '공진수 담임목사',
