@@ -43,7 +43,7 @@ const tags = [
   `<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />`,
   `<meta name="apple-mobile-web-app-title" content="기도" />`,
   `<link rel="apple-touch-icon" href="${base}/app-icon.png" />`,
-  `<meta name="description" content="구리 목양교회 기도 앱 — 기도 타이머·기록·기도제목·알림" />`,
+  `<meta name="description" content="목양교회 기도 앱 — 기도 타이머·기록·기도제목·알림" />`,
 ].join('\n    ');
 
 if (!html.includes('rel="manifest"')) {
