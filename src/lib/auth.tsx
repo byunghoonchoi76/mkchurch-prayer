@@ -40,6 +40,8 @@ interface AuthContextValue {
     patch: Partial<Pick<AppUser, 'name' | 'birthDate' | 'birthCalendar' | 'position' | 'parish' | 'affiliation'>>,
   ) => Promise<void>;
   signOut: () => Promise<void>;
+  /** 본인 계정과 관련 데이터를 영구히 삭제합니다. (복구 불가) */
+  deleteAccount: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -201,9 +203,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
+  const deleteAccount = useCallback(async () => {
+    if (hasSupabaseConfig && supabase) {
+      // 서버 함수가 호출자 본인의 계정만 삭제합니다. (연쇄로 기도 기록·기도제목 등도 삭제)
+      const { data, error } = await supabase.functions.invoke('delete-account');
+      if (error) throw new Error(error.message);
+      const res = data as { ok?: boolean; error?: string } | null;
+      if (!res?.ok) throw new Error(res?.error ?? '계정을 삭제하지 못했습니다.');
+      // 계정이 사라졌으니 로컬 세션도 정리합니다. (이미 무효가 되어 실패해도 무시)
+      try {
+        await supabase.auth.signOut();
+      } catch {
+        /* 무시 */
+      }
+    } else {
+      // 샘플 모드: 이 기기에 저장된 사용자만 지웁니다.
+      await AsyncStorage.removeItem(STORAGE_KEY);
+    }
+    setGuestAck(false);
+    setUser(null);
+  }, []);
+
   const value = useMemo<AuthContextValue>(
-    () => ({ user, loading, isAdmin: user?.role === 'admin', guestAck, chooseGuest, signIn, signUp, updateProfile, signOut }),
-    [user, loading, guestAck, chooseGuest, signIn, signUp, updateProfile, signOut],
+    () => ({ user, loading, isAdmin: user?.role === 'admin', guestAck, chooseGuest, signIn, signUp, updateProfile, signOut, deleteAccount }),
+    [user, loading, guestAck, chooseGuest, signIn, signUp, updateProfile, signOut, deleteAccount],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
