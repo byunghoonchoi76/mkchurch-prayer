@@ -180,11 +180,13 @@ export default function PrayerWallDisplay() {
   // 가로/세로, 큰 화면/작은 화면에 맞춰 타일 크기를 조절합니다.
   const landscape = width > height;
   const base = Math.min(width, height);
-  const fs = Math.round(Math.max(40, Math.min(landscape ? 138 : 88, base * (landscape ? 0.15 : 0.19))));
+  // 큰 TV·모니터(32인치+)에서도 시원하게 보이도록 상한을 넉넉히 둡니다.
+  // (가로: 화면 높이의 약 22%, 최대 300px / 세로: 약 20%, 최대 120px)
+  const fs = Math.round(Math.max(40, Math.min(landscape ? 300 : 120, base * (landscape ? 0.22 : 0.2))));
   const tileW = Math.round(fs * 0.76);
   const tileH = Math.round(fs * 1.2);
   const unitSize = Math.round(fs * 0.42);
-  const labelSize = Math.round(Math.max(16, Math.min(34, base * 0.04)));
+  const labelSize = Math.round(Math.max(18, Math.min(56, base * 0.048)));
 
   return (
     <View style={styles.root}>
