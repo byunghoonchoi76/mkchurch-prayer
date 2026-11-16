@@ -180,9 +180,19 @@ export default function PrayerWallDisplay() {
   // 가로/세로, 큰 화면/작은 화면에 맞춰 타일 크기를 조절합니다.
   const landscape = width > height;
   const base = Math.min(width, height);
-  // 큰 TV·모니터(32인치+)에서도 시원하게 보이도록 상한을 넉넉히 둡니다.
-  // (가로: 화면 높이의 약 22%, 최대 300px / 세로: 약 20%, 최대 120px)
-  const fs = Math.round(Math.max(40, Math.min(landscape ? 300 : 120, base * (landscape ? 0.22 : 0.2))));
+  // 자릿수가 늘어나도(예: 55만 시간 = 6자리+콤마) 가로로 넘치거나 줄바꿈되지 않도록,
+  // '화면 높이 기준 크기(상한 300px)'와 '가로 폭에 맞춘 크기' 중 작은 값을 씁니다.
+  // → 숫자가 짧으면 시원하게 크게, 길어지면 한 줄에 꽉 맞게 자동으로 줄어듭니다.
+  const digitCount = (s: string) => (s.match(/\d/g) || []).length;
+  const commaCount = (s: string) => (s.match(/,/g) || []).length;
+  // 한 줄에 필요한 가로 폭을 글자 크기(fs)의 배수로 어림합니다.
+  // (숫자 타일 ≈ 0.83fs, 콤마 ≈ 0.42fs, "시간"+"분"+여백 ≈ 1.5fs)
+  const widthSlots =
+    digitCount(hours) * 0.83 + commaCount(hours) * 0.42 + digitCount(minutes) * 0.83 + 1.5;
+  const fsByWidth = (width * 0.86) / Math.max(1, widthSlots);
+  const fs = Math.round(
+    Math.max(40, Math.min(landscape ? 300 : 120, base * (landscape ? 0.22 : 0.2), fsByWidth)),
+  );
   const tileW = Math.round(fs * 0.76);
   const tileH = Math.round(fs * 1.2);
   const unitSize = Math.round(fs * 0.42);
