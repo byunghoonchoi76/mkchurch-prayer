@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Alert, Platform, Pressable, StyleSheet, View } from 'react-native';
 
 import { HeroBanner } from '@/components/hero-banner';
 import { Screen } from '@/components/screen';
@@ -55,6 +55,29 @@ export default function PrayerRequestsScreen() {
     } catch {
       reloadShared();
     }
+  };
+
+  // 부적절·정치적 기도제목 등을 관리자(또는 작성자 본인)가 삭제합니다.
+  const deleteRequest = (id: string) => {
+    const remove = async () => {
+      // 목록에서 먼저 지우고(낙관적), 실패하면 되돌립니다.
+      sharedRequests.setData((cur) => cur?.filter((item) => item.id !== id));
+      try {
+        await repository.deletePrayerRequest(id);
+      } catch {
+        reloadShared();
+      }
+    };
+    const message = '이 기도제목을 삭제할까요? 되돌릴 수 없습니다.';
+    if (Platform.OS === 'web') {
+      // eslint-disable-next-line no-alert
+      if (window.confirm(message)) void remove();
+      return;
+    }
+    Alert.alert('기도제목 삭제', message, [
+      { text: '취소', style: 'cancel' },
+      { text: '삭제', style: 'destructive', onPress: () => void remove() },
+    ]);
   };
 
   const pray = async (id: string) => {
@@ -149,12 +172,21 @@ export default function PrayerRequestsScreen() {
               </View>
 
               {isAdmin || (user && item.authorId && item.authorId === user.id) ? (
-                <Button
-                  label={item.answered ? '다시 기도 중으로' : '기도 응답되었어요'}
-                  icon={item.answered ? 'refresh-outline' : 'checkmark-circle-outline'}
-                  variant="ghost"
-                  onPress={() => void toggleAnswered(item.id, !item.answered)}
-                />
+                <View style={styles.adminActions}>
+                  <Button
+                    label={item.answered ? '다시 기도 중으로' : '기도 응답되었어요'}
+                    icon={item.answered ? 'refresh-outline' : 'checkmark-circle-outline'}
+                    variant="ghost"
+                    style={styles.flex}
+                    onPress={() => void toggleAnswered(item.id, !item.answered)}
+                  />
+                  <Button
+                    label="삭제"
+                    icon="trash-outline"
+                    variant="ghost"
+                    onPress={() => deleteRequest(item.id)}
+                  />
+                </View>
               ) : null}
             </Card>
           ))}
@@ -230,6 +262,8 @@ const styles = StyleSheet.create({
   },
   stack: { gap: Spacing.two },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  adminActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  flex: { flex: 1 },
   noteCard: { gap: Spacing.two },
   noteHead: { flexDirection: 'row', alignItems: 'center', gap: Spacing.one },
   noteVerse: { fontStyle: 'italic' },
