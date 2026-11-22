@@ -1,0 +1,403 @@
+{
+  "title": "목양교회 기도",
+  "goal": "성도가 가입·로그인 후 기도를 기록하고, 기도제목을 나누며, 필요하면 계정을 삭제한다.",
+  "device": "mobile",
+  "start": "welcome",
+  "entries": ["home"],
+  "source": "목양교회 기도 앱(Expo/React Native + Supabase) 실제 화면 구조 기반.",
+  "vars": {
+    "email": "",
+    "password": "",
+    "name": "",
+    "agreed": false,
+    "todayMin": 0,
+    "reqTitle": "",
+    "reqBody": "",
+    "shared": true
+  },
+  "stages": ["시작하기", "기도하기", "기도제목", "설정·계정"],
+  "screens": [
+    {
+      "id": "welcome",
+      "number": "01.01",
+      "title": "시작 화면",
+      "stage": 0,
+      "slot": 0,
+      "origin": "source",
+      "brief": "앱을 처음 열면 교회 표어와 함께 로그인·회원가입·손님 진입을 제공합니다.",
+      "body": "두려워하지 말라, 강하고 담대하라 (신 31:6)",
+      "ui": {
+        "heading": "목양교회 기도",
+        "blocks": [
+          { "type": "text", "label": "혼자서도, 함께여도 기도의 자리를 지켜요." }
+        ]
+      },
+      "actions": [
+        { "id": "login", "label": "로그인", "to": "signin" },
+        { "id": "signup", "label": "회원가입", "to": "signup", "kind": "secondary" },
+        { "id": "guest", "label": "손님으로 둘러보기", "to": "home", "kind": "secondary" }
+      ]
+    },
+    {
+      "id": "signin",
+      "number": "01.02",
+      "title": "로그인",
+      "stage": 0,
+      "slot": 1,
+      "origin": "source",
+      "brief": "이메일·비밀번호로 로그인합니다. 실패 시 다시 시도할 수 있어야 합니다.",
+      "uxConditions": ["비밀번호가 틀리면 오류 안내 후 재입력"],
+      "ui": {
+        "bar": "로그인",
+        "blocks": [
+          { "type": "input", "label": "이메일", "field": "email", "inputType": "email", "required": true },
+          { "type": "input", "label": "비밀번호", "field": "password", "inputType": "text", "required": true }
+        ]
+      },
+      "actions": [
+        { "id": "submit", "label": "로그인", "to": "home", "validate": true },
+        { "id": "wrong-login", "label": "비밀번호 틀리게 입력(시뮬레이션)", "to": "signin-error", "kind": "simulation" },
+        { "id": "to-signup", "label": "계정이 없으신가요? 가입하기", "to": "signup", "kind": "secondary" }
+      ]
+    },
+    {
+      "id": "signin-error",
+      "number": "01.03",
+      "title": "로그인 실패",
+      "stage": 0,
+      "slot": 2,
+      "origin": "source",
+      "tone": "error",
+      "brief": "이메일 또는 비밀번호가 맞지 않을 때의 복구 경로.",
+      "body": "이메일 또는 비밀번호가 맞지 않습니다.",
+      "actions": [
+        { "id": "retry", "label": "다시 입력", "to": "signin" }
+      ]
+    },
+    {
+      "id": "signup",
+      "number": "01.04",
+      "title": "회원가입",
+      "stage": 0,
+      "slot": 3,
+      "origin": "source",
+      "brief": "이름·이메일·비밀번호 입력과 약관·개인정보 동의 후 가입합니다.",
+      "uxConditions": ["약관 미동의 시 가입 버튼 진행 불가"],
+      "ui": {
+        "bar": "회원가입",
+        "blocks": [
+          { "type": "input", "label": "이름", "field": "name", "inputType": "text", "required": true },
+          { "type": "input", "label": "이메일", "field": "email", "inputType": "email", "required": true },
+          { "type": "input", "label": "비밀번호", "field": "password", "inputType": "text", "required": true },
+          { "type": "checkbox", "label": "이용약관 및 개인정보처리방침에 동의합니다", "field": "agreed", "required": true }
+        ]
+      },
+      "actions": [
+        { "id": "register", "label": "가입하고 시작하기", "to": "signup-sent", "validate": true }
+      ]
+    },
+    {
+      "id": "signup-sent",
+      "number": "01.05",
+      "title": "확인 메일 안내",
+      "stage": 0,
+      "slot": 4,
+      "origin": "inferred",
+      "tone": "pending",
+      "brief": "확인 메일 발송 후 링크 확인을 안내합니다. (Supabase 이메일 확인 사용 시)",
+      "uxConditions": ["이메일 확인 정책은 서버 설정에 따름"],
+      "body": "{{email}} 로 확인 메일을 보냈습니다. 메일의 링크를 누른 뒤 로그인해 주세요.",
+      "actions": [
+        { "id": "go-login", "label": "로그인하러 가기", "to": "signin" }
+      ]
+    },
+    {
+      "id": "home",
+      "number": "02.01",
+      "title": "기도하기",
+      "stage": 1,
+      "slot": 0,
+      "origin": "source",
+      "brief": "가운데 +1H 버튼을 눌러 기도 타이머를 시작합니다. 온 성도 누적 기도시간도 함께 보여줍니다.",
+      "body": "오늘 기도 {{todayMin}}분 · 눌러서 기도 시작",
+      "ui": {
+        "bar": "목양교회 기도",
+        "blocks": [
+          { "type": "notice", "label": "주는 나의 빛, 나의 구원 (시편 27:1)" },
+          { "type": "rows", "rows": [
+            { "label": "오늘 기도", "value": "{{todayMin}}분" },
+            { "label": "온 성도 누적", "value": "99시간 8분" }
+          ] }
+        ]
+      },
+      "actions": [
+        { "id": "start-pray", "label": "＋1H 눌러서 기도 시작", "to": "praying" },
+        { "id": "tab-home", "label": "기도하기", "to": "home", "kind": "tab" },
+        { "id": "tab-intercession", "label": "기도제목", "to": "intercession", "kind": "tab" },
+        { "id": "tab-records", "label": "기도 기록", "to": "records", "kind": "tab" },
+        { "id": "tab-settings", "label": "설정", "to": "settings", "kind": "tab" }
+      ]
+    },
+    {
+      "id": "praying",
+      "number": "02.02",
+      "title": "기도 중",
+      "stage": 1,
+      "slot": 1,
+      "origin": "source",
+      "tone": "pending",
+      "brief": "타이머가 흐르고, 배경음악(선택)이 재생됩니다. '아멘'을 누르면 오늘 기도시간에 기록됩니다.",
+      "uxConditions": ["하루 목표 시간을 넘기면 '기록하고 마칠까요?' 안내", "취소하면 기록하지 않고 홈으로"],
+      "body": "기도 중… 00:30:00",
+      "actions": [
+        { "id": "amen", "label": "아멘 (기록하고 마치기)", "to": "prayer-done", "inc": { "todayMin": 30 } },
+        { "id": "cancel", "label": "취소", "to": "home", "kind": "back" }
+      ]
+    },
+    {
+      "id": "prayer-done",
+      "number": "02.03",
+      "title": "기록 완료",
+      "stage": 1,
+      "slot": 2,
+      "origin": "source",
+      "tone": "success",
+      "brief": "기도시간이 계정에 저장되고 오늘 누적에 더해집니다.",
+      "body": "오늘 기도 {{todayMin}}분으로 기록되었습니다.",
+      "end": true,
+      "actions": [
+        { "id": "back-home", "label": "확인", "to": "home" }
+      ]
+    },
+    {
+      "id": "records",
+      "number": "02.04",
+      "title": "기도 기록",
+      "stage": 1,
+      "slot": 3,
+      "origin": "source",
+      "brief": "날짜별 나의 기도시간과 주간 달성률을 봅니다.",
+      "ui": {
+        "bar": "기도 기록",
+        "blocks": [
+          { "type": "rows", "rows": [
+            { "label": "이번 주", "value": "3시간 20분" },
+            { "label": "오늘", "value": "{{todayMin}}분" }
+          ] }
+        ]
+      },
+      "actions": [
+        { "id": "tab-home", "label": "기도하기", "to": "home", "kind": "tab" },
+        { "id": "tab-intercession", "label": "기도제목", "to": "intercession", "kind": "tab" },
+        { "id": "tab-records", "label": "기도 기록", "to": "records", "kind": "tab" },
+        { "id": "tab-settings", "label": "설정", "to": "settings", "kind": "tab" }
+      ]
+    },
+    {
+      "id": "intercession",
+      "number": "03.01",
+      "title": "기도제목",
+      "stage": 2,
+      "slot": 0,
+      "origin": "source",
+      "brief": "개인·공동·중보 기도제목을 한곳에서 모아 봅니다.",
+      "ui": {
+        "bar": "기도제목",
+        "blocks": [
+          { "type": "rows", "rows": [
+            { "label": "개인 기도제목", "value": "나만 보기" },
+            { "label": "공동 기도제목", "value": "온 성도 함께" },
+            { "label": "중보기도제목", "value": "서로를 위해" }
+          ] }
+        ]
+      },
+      "actions": [
+        { "id": "go-requests", "label": "중보기도제목 보기", "to": "requests" },
+        { "id": "go-personal", "label": "개인 기도제목", "to": null, "kind": "secondary" },
+        { "id": "tab-home", "label": "기도하기", "to": "home", "kind": "tab" },
+        { "id": "tab-intercession", "label": "기도제목", "to": "intercession", "kind": "tab" },
+        { "id": "tab-records", "label": "기도 기록", "to": "records", "kind": "tab" },
+        { "id": "tab-settings", "label": "설정", "to": "settings", "kind": "tab" }
+      ]
+    },
+    {
+      "id": "requests",
+      "number": "03.02",
+      "title": "중보기도제목",
+      "stage": 2,
+      "slot": 1,
+      "origin": "source",
+      "brief": "성도들이 올린 공개 기도제목 목록. '함께 기도'로 응원하고, 관리자(또는 작성자)는 부적절한 글을 삭제할 수 있습니다.",
+      "uxConditions": ["관리자는 모든 글, 작성자는 본인 글에 삭제 버튼 노출", "삭제 시 확인창 후 영구 삭제"],
+      "ui": {
+        "bar": "중보기도제목",
+        "blocks": [
+          { "type": "rows", "rows": [
+            { "label": "어머니 수술", "value": "함께 기도 12" },
+            { "label": "자녀 입시", "value": "함께 기도 8" }
+          ] }
+        ]
+      },
+      "actions": [
+        { "id": "add", "label": "기도제목 올리기", "to": "new-request" },
+        { "id": "pray", "label": "함께 기도", "to": "requests", "kind": "secondary" },
+        { "id": "delete", "label": "삭제 (관리자)", "to": "requests", "kind": "secondary" },
+        { "id": "tab-home", "label": "기도하기", "to": "home", "kind": "tab" },
+        { "id": "tab-intercession", "label": "기도제목", "to": "intercession", "kind": "tab" },
+        { "id": "tab-records", "label": "기도 기록", "to": "records", "kind": "tab" },
+        { "id": "tab-settings", "label": "설정", "to": "settings", "kind": "tab" }
+      ]
+    },
+    {
+      "id": "new-request",
+      "number": "03.03",
+      "title": "기도제목 작성",
+      "stage": 2,
+      "slot": 2,
+      "origin": "source",
+      "brief": "제목·내용을 적고, '함께 기도 요청(공개)'으로 공유하거나 나만 보기로 둡니다.",
+      "uxConditions": ["제목·내용이 비면 올리기 불가", "공개 끄면 개인 기도제목(나만 보기)"],
+      "ui": {
+        "bar": "기도제목 작성",
+        "blocks": [
+          { "type": "input", "label": "기도제목", "field": "reqTitle", "inputType": "text", "required": true },
+          { "type": "input", "label": "내용", "field": "reqBody", "inputType": "textarea", "required": true },
+          { "type": "toggle", "label": "함께 기도 요청으로 공개", "field": "shared" }
+        ]
+      },
+      "actions": [
+        { "id": "submit-req", "label": "올리기", "to": "requests", "validate": true },
+        { "id": "cancel-req", "label": "취소", "to": "requests", "kind": "back" }
+      ]
+    },
+    {
+      "id": "settings",
+      "number": "04.01",
+      "title": "설정",
+      "stage": 3,
+      "slot": 0,
+      "origin": "source",
+      "brief": "알림·글자크기·글꼴·배경음악·약관을 설정하고, 로그아웃 또는 계정 삭제를 할 수 있습니다.",
+      "ui": {
+        "bar": "설정",
+        "blocks": [
+          { "type": "rows", "rows": [
+            { "label": "기도 알림", "value": "요일·시간" },
+            { "label": "글자 크기", "value": "보통" },
+            { "label": "기도 배경음악", "value": "켜기/끄기" }
+          ] },
+          { "type": "accordion", "label": "약관 · 정책", "copy": "개인정보처리방침 · 이용약관 · 이메일무단수집거부 · 계정 삭제" }
+        ]
+      },
+      "actions": [
+        { "id": "go-delete", "label": "계정 삭제", "to": "account-delete", "kind": "secondary" },
+        { "id": "logout", "label": "로그아웃", "to": "welcome", "kind": "secondary" },
+        { "id": "tab-home", "label": "기도하기", "to": "home", "kind": "tab" },
+        { "id": "tab-intercession", "label": "기도제목", "to": "intercession", "kind": "tab" },
+        { "id": "tab-records", "label": "기도 기록", "to": "records", "kind": "tab" },
+        { "id": "tab-settings", "label": "설정", "to": "settings", "kind": "tab" }
+      ]
+    },
+    {
+      "id": "account-delete",
+      "number": "04.02",
+      "title": "계정 삭제",
+      "stage": 3,
+      "slot": 1,
+      "origin": "source",
+      "tone": "error",
+      "brief": "앱 안에서 본인 계정과 데이터를 영구 삭제합니다. (App Store/Play 요건 충족)",
+      "uxConditions": ["삭제 확인 후 복구 불가", "로그인 상태에서만 가능"],
+      "body": "계정·기도 기록·작성한 기도제목이 영구히 삭제됩니다.",
+      "actions": [
+        { "id": "confirm-delete", "label": "계정 삭제", "to": "account-deleted" },
+        { "id": "cancel-delete", "label": "취소", "to": "settings", "kind": "back" }
+      ]
+    },
+    {
+      "id": "account-deleted",
+      "number": "04.03",
+      "title": "삭제 완료",
+      "stage": 3,
+      "slot": 2,
+      "origin": "source",
+      "tone": "success",
+      "brief": "삭제 완료 후 처음 화면으로 돌아갑니다.",
+      "body": "계정이 삭제되었습니다. 그동안 함께해 주셔서 감사합니다.",
+      "end": true,
+      "actions": [
+        { "id": "to-welcome", "label": "처음 화면으로", "to": "welcome" }
+      ]
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "onboarding",
+      "title": "가입하고 시작하기",
+      "start": "welcome",
+      "steps": [
+        { "action": "signup", "screen": "signup" },
+        { "action": "register", "screen": "signup-sent", "hint": "이름·이메일·비밀번호 입력 후 약관 동의" },
+        { "action": "go-login", "screen": "signin" },
+        { "action": "submit", "screen": "home", "hint": "이메일·비밀번호 입력" }
+      ]
+    },
+    {
+      "id": "pray",
+      "title": "기도하고 기록하기",
+      "start": "home",
+      "steps": [
+        { "action": "start-pray", "screen": "praying" },
+        { "action": "amen", "screen": "prayer-done", "vars": { "todayMin": 30 } },
+        { "action": "back-home", "screen": "home" }
+      ]
+    },
+    {
+      "id": "share",
+      "title": "중보기도제목 나누기",
+      "start": "home",
+      "steps": [
+        { "action": "tab-intercession", "screen": "intercession" },
+        { "action": "go-requests", "screen": "requests" },
+        { "action": "add", "screen": "new-request" },
+        { "action": "submit-req", "screen": "requests", "hint": "제목·내용 입력" }
+      ]
+    },
+    {
+      "id": "signin-recovery",
+      "title": "로그인 실패 후 다시 시도",
+      "start": "signin",
+      "steps": [
+        { "action": "wrong-login", "screen": "signin-error" },
+        { "action": "retry", "screen": "signin" },
+        { "action": "submit", "screen": "home", "hint": "올바른 이메일·비밀번호 입력" }
+      ]
+    },
+    {
+      "id": "delete-account",
+      "title": "계정 삭제하기",
+      "start": "home",
+      "steps": [
+        { "action": "tab-settings", "screen": "settings" },
+        { "action": "go-delete", "screen": "account-delete" },
+        { "action": "confirm-delete", "screen": "account-deleted" }
+      ]
+    }
+  ],
+  "decisions": [
+    { "screen": "signup-sent", "question": "이메일 확인(컨펌)을 필수로 할지, 가입 즉시 로그인시킬지 정책 결정 필요" },
+    { "screen": "praying", "question": "하루 목표 시간을 넘겼을 때 자동 기록 마감 임계값을 몇 분으로 할지" },
+    { "screen": "requests", "question": "관리자가 비공개(개인) 기도제목까지 관리/삭제할 수 있게 할지 (현재 방침: 비공개는 작성자만)" }
+  ],
+  "review": {
+    "locale": "ko",
+    "groupDirection": "vertical",
+    "requirements": [
+      { "id": "req-signin-recovery", "group": "시작하기", "screen": "signin", "action": "retry", "title": "로그인 실패 복구", "expected": "비밀번호가 틀리면 오류를 안내하고 다시 입력해 로그인할 수 있다.", "origin": "source" },
+      { "id": "req-pray-record", "group": "기도하기", "screen": "praying", "action": "amen", "title": "기도시간 기록", "expected": "아멘을 누르면 오늘 기도시간에 기록된다.", "origin": "source" },
+      { "id": "req-share", "group": "기도제목", "screen": "new-request", "action": "submit-req", "title": "기도제목 올리기", "expected": "제목·내용을 입력하면 중보기도제목에 올라간다.", "origin": "source" },
+      { "id": "req-moderate", "group": "기도제목", "screen": "requests", "action": "delete", "title": "부적절 글 삭제", "expected": "관리자는 부적절한 기도제목을 삭제할 수 있다.", "origin": "source" },
+      { "id": "req-account-delete", "group": "설정·계정", "screen": "account-delete", "action": "confirm-delete", "title": "앱 내 계정 삭제", "expected": "앱 안에서 본인 계정과 데이터를 영구 삭제할 수 있다.", "origin": "source" }
+    ]
+  }
+}
