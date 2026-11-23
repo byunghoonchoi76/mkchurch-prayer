@@ -605,6 +605,20 @@ function MemberManager({
   );
 }
 
+/**
+ * 타일 값이 '한 줄'에 들어가도록 글자 길이에 맞춰 크기를 줄입니다.
+ * 웹(react-native-web)에서는 adjustsFontSizeToFit 이 동작하지 않아 직접 계산합니다.
+ * 숫자·공백·기호는 좁고 한글 등은 넓으므로 대략의 가로 폭(em)으로 환산합니다.
+ */
+function fitStatFontSize(value: string): number {
+  let em = 0;
+  for (const ch of value) em += /[0-9.,:%\s]/.test(ch) ? 0.56 : 1;
+  const BASE = 22;
+  const LIMIT = 5.2; // BASE 크기에서 한 줄에 들어가는 대략 한도(em)
+  if (em <= LIMIT) return BASE;
+  return Math.max(13, Math.round((BASE * LIMIT) / em));
+}
+
 /** 상단 요약 타일. */
 function StatTile({
   icon,
@@ -618,12 +632,15 @@ function StatTile({
   sub?: string;
 }) {
   const theme = useTheme();
+  const fontSize = fitStatFontSize(value);
   return (
     <Card style={styles.statTile}>
       <View style={[styles.statIcon, { backgroundColor: theme.backgroundSelected }]}>
         <Ionicons name={icon} size={18} color={theme.primary} />
       </View>
-      <ThemedText numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.5} style={[styles.statValue, styles.center]}>
+      <ThemedText
+        numberOfLines={1}
+        style={[styles.statValue, styles.center, { fontSize, lineHeight: Math.round(fontSize * 1.27) }]}>
         {value}
       </ThemedText>
       <ThemedText type="caption" themeColor="textMuted" fixed>
