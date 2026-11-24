@@ -148,14 +148,14 @@ export default function AdminDashboardScreen() {
         <Card>
           <View style={styles.weekRow}>
             <View style={styles.weekItem}>
-              <ThemedText type="title">{data ? `${weekCount}명` : '…'}</ThemedText>
+              <FitText type="title" base={28} maxWidth={135} value={data ? `${weekCount}명` : '…'} />
               <ThemedText type="caption" themeColor="textMuted" fixed>
                 기도한 성도
               </ThemedText>
             </View>
             <View style={styles.weekDivider} />
             <View style={styles.weekItem}>
-              <ThemedText type="title">{data ? hmLabel(weekTotal) : '…'}</ThemedText>
+              <FitText type="title" base={28} maxWidth={135} value={data ? hmLabel(weekTotal) : '…'} />
               <ThemedText type="caption" themeColor="textMuted" fixed>
                 총 기도시간
               </ThemedText>
@@ -421,9 +421,7 @@ function TopList({ items }: { items: AdminMemberPrayerStat[] }) {
           <View style={[styles.parishTrack, { backgroundColor: theme.backgroundSelected }]}>
             <View style={[styles.parishFill, { width: `${Math.max(6, (s.totalSec / max) * 100)}%`, backgroundColor: theme.primary }]} />
           </View>
-          <ThemedText type="caption" themeColor="textMuted" fixed style={styles.topTime}>
-            {hmLabel(s.totalSec)}
-          </ThemedText>
+          <FitText type="caption" color="textMuted" base={12} maxWidth={84} style={styles.topTime} value={hmLabel(s.totalSec)} />
         </View>
       ))}
     </Card>
@@ -477,9 +475,7 @@ function ParishPrayerStats({ members, stats }: { members: AppMember[]; stats: Ad
               <View style={[styles.parishTrack, { backgroundColor: theme.backgroundSelected }]}>
                 <View style={[styles.parishFill, { width: `${Math.max(6, (r.total / max) * 100)}%`, backgroundColor: muted ? theme.textMuted : theme.primary }]} />
               </View>
-              <ThemedText type="caption" themeColor="textMuted" fixed style={styles.topTime}>
-                {hmLabel(r.total)}
-              </ThemedText>
+              <FitText type="caption" color="textMuted" base={12} maxWidth={84} style={styles.topTime} value={hmLabel(r.total)} />
             </View>
             <ThemedText type="caption" themeColor="textMuted" style={styles.parishPraySub} fixed>
               최근 7일 {hmLabel(r.week)} · {r.prayed}명 기도
@@ -606,17 +602,45 @@ function MemberManager({
 }
 
 /**
- * 타일 값이 '한 줄'에 들어가도록 글자 길이에 맞춰 크기를 줄입니다.
+ * 값이 '한 줄'에 들어가도록 글자 길이에 맞춰 크기를 줄입니다.
  * 웹(react-native-web)에서는 adjustsFontSizeToFit 이 동작하지 않아 직접 계산합니다.
  * 숫자·공백·기호는 좁고 한글 등은 넓으므로 대략의 가로 폭(em)으로 환산합니다.
+ * base: 기본 글자 크기(px), maxWidth: 한 줄로 쓸 수 있는 대략 폭(px).
  */
-function fitStatFontSize(value: string): number {
+function fitFontSize(value: string, base: number, maxWidth: number): number {
   let em = 0;
   for (const ch of value) em += /[0-9.,:%\s]/.test(ch) ? 0.56 : 1;
-  const BASE = 22;
-  const LIMIT = 5.2; // BASE 크기에서 한 줄에 들어가는 대략 한도(em)
-  if (em <= LIMIT) return BASE;
-  return Math.max(13, Math.round((BASE * LIMIT) / em));
+  if (em * base <= maxWidth) return base;
+  return Math.max(12, Math.floor(maxWidth / em));
+}
+
+/** 한 줄 자동 맞춤 텍스트 — 긴 값(예: 164시간 46분)이 두 줄로 넘어가지 않게 크기를 줄입니다. */
+function FitText({
+  value,
+  base,
+  maxWidth,
+  type,
+  color,
+  style,
+}: {
+  value: string;
+  base: number;
+  maxWidth: number;
+  type?: React.ComponentProps<typeof ThemedText>['type'];
+  color?: React.ComponentProps<typeof ThemedText>['themeColor'];
+  style?: React.ComponentProps<typeof ThemedText>['style'];
+}) {
+  const fontSize = fitFontSize(value, base, maxWidth);
+  return (
+    <ThemedText
+      type={type}
+      themeColor={color}
+      fixed
+      numberOfLines={1}
+      style={[style, { fontSize, lineHeight: Math.round(fontSize * 1.27) }]}>
+      {value}
+    </ThemedText>
+  );
 }
 
 /** 상단 요약 타일. */
@@ -632,7 +656,7 @@ function StatTile({
   sub?: string;
 }) {
   const theme = useTheme();
-  const fontSize = fitStatFontSize(value);
+  const fontSize = fitFontSize(value, 22, 120);
   return (
     <Card style={styles.statTile}>
       <View style={[styles.statIcon, { backgroundColor: theme.backgroundSelected }]}>
