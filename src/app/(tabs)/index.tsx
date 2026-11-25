@@ -71,10 +71,11 @@ async function loadAllTopics(): Promise<TopicsByKind> {
     repository.listCommunalPrayers(),
     repository.listSharedPrayerRequests(),
   ]);
+  // '응답됨'으로 표시한 기도제목은 '오늘의 기도'에서 제외합니다. (기도 응답으로 마무리된 제목)
   return {
-    personal: personal.map(requestToTopic('personal')),
+    personal: personal.filter((r) => !r.answered).map(requestToTopic('personal')),
     communal: communal.map(communalToTopic),
-    intercession: intercession.map(requestToTopic('intercession')),
+    intercession: intercession.filter((r) => !r.answered).map(requestToTopic('intercession')),
   };
 }
 
@@ -699,9 +700,8 @@ function PrayerFocusModal({
   const dialSize = Math.round(Math.max(140, Math.min(252, winW - 72, winH * 0.29)));
   const [pickerOpen, setPickerOpen] = useState(false);
 
-  // 고른 선택에 맞는 기도제목만 모읍니다. (기도 중인 제목 먼저, 응답된 제목은 뒤)
-  const chosen = selectedTopics(byKind, selection);
-  const ordered = [...chosen.filter((t) => !t.answered), ...chosen.filter((t) => t.answered)];
+  // 고른 선택에 맞는 기도제목만 모읍니다. (응답된 제목은 불러오는 단계에서 이미 제외됨)
+  const ordered = selectedTopics(byKind, selection);
 
   // 기도제목을 한 장씩 보여 줍니다. 좌우로 밀어 직접 넘길 수 있고(아래 ScrollView),
   // 넘기기 전까지는 일정 시간마다 자동으로 다음 제목으로 넘어갑니다.
@@ -889,13 +889,12 @@ function PrayerFocusModal({
                               </ThemedText>
                             </View>
                             {t.category ? <CategoryChip category={t.category} /> : null}
-                            {t.answered ? <Ionicons name="checkmark-circle" size={16} color={theme.success} /> : null}
                           </View>
-                          <ThemedText type="subtitle" style={[styles.center, t.answered && styles.focusAnswered]}>
+                          <ThemedText type="subtitle" style={styles.center}>
                             {formatTopicText(t.title)}
                           </ThemedText>
                           {t.body ? (
-                            <ThemedText type="small" themeColor="textSecondary" style={[styles.center, t.answered && styles.focusAnswered]}>
+                            <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
                               {formatTopicText(t.body)}
                             </ThemedText>
                           ) : null}
@@ -1296,7 +1295,6 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     alignItems: 'center',
   },
-  focusAnswered: { textDecorationLine: 'line-through', opacity: 0.6 },
   focusButtonRow: { flexDirection: 'row', gap: Spacing.two },
   pauseBtn: {
     flex: 1,
